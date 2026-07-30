@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 明亮主题用：透明 + 深蓝YS（在浅色文件管理器背景上清晰） -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" shape-rendering="geometricPrecision">
+  <defs>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1A1A2E"/>
+      <stop offset="100%" stop-color="#2D2964"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#textGrad)">
+    <!-- Y -->
+    <path d="M 56 74 L 76 74 L 108 126 L 108 196 L 88 196 L 88 126 Z"/>
+    <path d="M 138 74 L 158 74 L 126 126 L 116 116 Z"/>
+    <path d="M 101 121 L 123 121 L 118 132 L 106 132 Z"/>
+    <!-- S -->
+    <rect x="148" y="74" width="66" height="16" rx="8"/>
+    <rect x="148" y="74" width="16" height="42" rx="8"/>
+    <rect x="148" y="124" width="66" height="16" rx="8"/>
+    <rect x="198" y="140" width="16" height="52" rx="8"/>
+    <rect x="148" y="176" width="66" height="16" rx="8"/>
+  </g>
+</svg>

@@ -1,0 +1,245 @@
+{
+  "package main": {
+    "prefix": "pkgmain",
+    "body": [
+      "package main",
+      "",
+      "func main() {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "package main + main 函数"
+  },
+  "function": {
+    "prefix": "func",
+    "body": [
+      "func ${1:name}(${2:args}) {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "函数定义"
+  },
+  "function with return": {
+    "prefix": "funcr",
+    "body": [
+      "func ${1:name}(${2:args}) {",
+      "\treturn ${0}",
+      "}",
+      ""
+    ],
+    "description": "带返回值的函数"
+  },
+  "if": {
+    "prefix": "if",
+    "body": [
+      "if ${1:cond} {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "if 块"
+  },
+  "if else": {
+    "prefix": "ifelse",
+    "body": [
+      "if ${1:cond} {",
+      "\t${2}",
+      "} else {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "if-else 块"
+  },
+  "for range": {
+    "prefix": "forr",
+    "body": [
+      "for ${1:i} in ${2:range(0, 10)} {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "for 循环（范围）"
+  },
+  "for list": {
+    "prefix": "forl",
+    "body": [
+      "for ${1:item} in ${2:list} {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "for 循环（列表）"
+  },
+  "for dict": {
+    "prefix": "ford",
+    "body": [
+      "for ${1:k}, ${2:v} in ${3:dict} {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "for 循环（字典）"
+  },
+  "while": {
+    "prefix": "while",
+    "body": [
+      "while ${1:cond} {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "while 循环"
+  },
+  "loop": {
+    "prefix": "loop",
+    "body": [
+      "loop {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "无限循环"
+  },
+  "match": {
+    "prefix": "match",
+    "body": [
+      "match ${1:val} {",
+      "\t${2:pattern} => ${3:body}",
+      "\t_ => ${0:default}",
+      "}",
+      ""
+    ],
+    "description": "match 模式匹配"
+  },
+  "try catch": {
+    "prefix": "try",
+    "body": [
+      "try {",
+      "\t${1}",
+      "} catch ${2:e} {",
+      "\tprintln(e)",
+      "} finally {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "try-catch-finally 块"
+  },
+  "warp": {
+    "prefix": "warp",
+    "body": [
+      "warp func() {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "启动并发协程"
+  },
+  "shell command": {
+    "prefix": "shell",
+    "body": [
+      "`${1:command}`"
+    ],
+    "description": "Shell 命令块"
+  },
+  "shell with var": {
+    "prefix": "shellvar",
+    "body": [
+      "let ${1:result} = `\\${${2:cmd}}`"
+    ],
+    "description": "Shell 命令赋值给变量"
+  },
+  "bytes hex": {
+    "prefix": "bytes",
+    "body": [
+      "b\"\\x${1:90}\\x${2:cc}\""
+    ],
+    "description": "bytes 十六进制字面量"
+  },
+  "bytes base64": {
+    "prefix": "b64",
+    "body": [
+      "b\"base64:${1:SGVsbG8=}\""
+    ],
+    "description": "bytes Base64 字面量"
+  },
+  "import": {
+    "prefix": "imp",
+    "body": [
+      "import \"${1:path}\""
+    ],
+    "description": "import 路径"
+  },
+  "struct": {
+    "prefix": "struct",
+    "body": [
+      "struct ${1:Name} {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "结构体定义"
+  },
+  "class": {
+    "prefix": "class",
+    "body": [
+      "class ${1:Name} {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "类定义"
+  },
+  "enum": {
+    "prefix": "enum",
+    "body": [
+      "enum ${1:Name} {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "枚举定义"
+  },
+  "interface": {
+    "prefix": "iface",
+    "body": [
+      "interface ${1:Name} {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "接口定义"
+  },
+  "channel": {
+    "prefix": "ch",
+    "body": [
+      "let ${1:ch} = channel(${2:size})"
+    ],
+    "description": "创建通道"
+  },
+  "mutex": {
+    "prefix": "mtx",
+    "body": [
+      "let ${1:m} = mutex()"
+    ],
+    "description": "创建互斥锁"
+  },
+  "comment": {
+    "prefix": "//",
+    "body": ["// ${0}"],
+    "description": "行注释"
+  },
+  "block comment": {
+    "prefix": "/*",
+    "body": ["/*", " * ${0}", " */"],
+    "description": "块注释"
+  },
+  "TODO": {
+    "prefix": "todo",
+    "body": ["// TODO: ${0}"],
+    "description": "TODO 注释"
+  }
+}

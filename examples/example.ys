@@ -1,0 +1,125 @@
+#!/usr/bin/env yscript
+// YScript 示例：展示 LSP 各种能力
+package main
+
+import "fmt"
+
+// 常量与类型
+const MAX_PORT: ushort = 65535
+let targets: list<string> = ["127.0.0.1", "192.168.1.1"]
+let cache: dict<string, int> = {}
+
+// 注释分类：
+//   - 行注释 // ...
+//   - 块注释 /* ... */
+//   - 文档注释 /** ... */
+
+/**
+ * 扫描单端口
+ * @param host 目标主机
+ * @param port 端口
+ * @returns 端口是否开放
+ */
+func scan_port(host: string, port: ushort) -> bool {
+    let cmd = `nc -z -w 1 ${host} ${port}`
+    let result = `echo $?`
+    return result == "0"
+}
+
+// 类型推断演示：let 的右侧会决定变量类型
+let inferred_str = "hello"     // → string
+let inferred_list = [1, 2, 3]  // → list
+let inferred_dict = {}         // → dict
+let inferred_bytes = b"\x90\x90"  // → bytes
+let inferred_int = 42          // → int
+let inferred_bool = true       // → bool
+
+func main() {
+    let host = "127.0.0.1"
+    let open_ports: list<ushort> = []
+
+    // for-range 循环
+    for port in range(1, 1024) {
+        // 条件判断
+        if scan_port(host, port) {
+            open_ports.push(port)
+            println("开放端口: " + string(port))
+        } elif port == 80 {
+            println("HTTP 端口")
+        } else {
+            log_warn("已跳过端口 " + string(port))
+        }
+    }
+
+    // 字符串方法链
+    let banner = "  YScript Scan  ".trim().upper()
+    println(banner.split(" "))
+
+    // 列表方法
+    open_ports
+        .filter(|p| p > 1000)
+        .map(|p| p + 10000)
+        .sort()
+
+    // 字典方法
+    cache.set("last_host", host)
+    println(cache.keys(), cache.values())
+
+    // 字典 / JSON
+    let resp = http_get("https://api.example.com")
+    println(json.decode(resp))
+
+    // Socket
+    let sock = tcp_connect("127.0.0.1", 8080)
+    if sock != nil {
+        sock.send(b"\x00\x01")
+        let data = sock.recv(1024)
+        println("收到: " + data.hex())
+    }
+
+    // Shell 命令
+    let nmap_out = `nmap -sV 127.0.0.1`
+    log_info(nmap_out)
+
+    // 字节字面量 + base64
+    let nop_sled = b"\x90\x90\x90\xcc"
+    println("Shellcode 长度: " + string(len(nop_sled)))
+    println("Base64: " + nop_sled.base64())
+    println("Hex: " + nop_sled.hex())
+
+    // 错误处理
+    try {
+        let f = open("/etc/shadow", "r")
+        defer close(f)
+    } catch e {
+        log_error("读取失败: " + e)
+    } finally {
+        println("清理完成")
+    }
+
+    // 模式匹配
+    match port {
+        22 => println("SSH")
+        80 => println("HTTP")
+        443 => println("HTTPS")
+        _ => println("其它")
+    }
+}
+
+// 结构体
+struct Point {
+    x: float
+    y: float
+}
+
+// 枚举
+enum Color {
+    RED
+    GREEN
+    BLUE
+}
+
+// 接口
+interface Drawable {
+    draw() -> void
+}

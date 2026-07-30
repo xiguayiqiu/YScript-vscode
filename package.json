@@ -1,0 +1,105 @@
+{
+  "name": "yscript",
+  "displayName": "YScript",
+  "description": "YScript 语言支持：语法高亮、LSP 智能补全、代码片段（网安专用脚本语言）",
+  "version": "0.1.0",
+  "publisher": "yscript",
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "yscript",
+    "security",
+    "shell",
+    "pentest"
+  ],
+  "main": "./client/out/extension.js",
+  "activationEvents": [
+    "onLanguage:yscript"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "yscript",
+        "aliases": [
+          "YScript",
+          "yscript"
+        ],
+        "extensions": [
+          ".ys",
+          ".yscript"
+        ],
+        "filenames": [],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "yscript",
+        "scopeName": "source.yscript",
+        "path": "./syntaxes/yscript.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "yscript",
+        "path": "./snippets/yscript.json"
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "yscript-icons",
+        "label": "YScript File Icons",
+        "path": "./icons/yscript-icon-theme.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "YScript",
+      "properties": {
+        "yscript.server.path": {
+          "type": "string",
+          "default": "",
+          "description": "YScript LSP 服务器可执行文件路径（留空则使用内置 Node 服务器）"
+        },
+        "yscript.server.trace": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "LSP 通信追踪级别"
+        },
+        "yscript.format.tabSize": {
+          "type": "number",
+          "default": 4,
+          "description": "格式化缩进大小"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./tsconfig.json && tsc -p ./client/tsconfig.json && tsc -p ./server/tsconfig.json",
+    "watch": "tsc -w -p ./tsconfig.json",
+    "build": "npm run compile",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.9.2",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^10.1.0",
+    "vscode-languageserver": "^8.1.0",
+    "vscode-languageserver-textdocument": "^1.0.11"
+  }
+}

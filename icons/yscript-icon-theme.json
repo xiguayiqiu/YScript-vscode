@@ -1,0 +1,33 @@
+{
+  "id": "yscript-icons",
+  "label": "YScript File Icons",
+  "description": "File icons for YScript (.ys, .yscript) files - vector SVG, scales perfectly and adapts to light/dark themes",
+  "iconDefinitions": {
+    "_ys_dark": {
+      "iconPath": "./yscript-logo-dark.svg"
+    },
+    "_ys_light": {
+      "iconPath": "./yscript-logo-light.svg"
+    }
+  },
+  "fileExtensions": {
+    "ys": "_ys_dark",
+    "yscript": "_ys_dark"
+  },
+  "fileNames": {
+    "ysconfig.json": "_ys_dark",
+    "ys.toml": "_ys_dark",
+    "YScriptfile": "_ys_dark"
+  },
+  "light": {
+    "fileExtensions": {
+      "ys": "_ys_light",
+      "yscript": "_ys_light"
+    },
+    "fileNames": {
+      "ysconfig.json": "_ys_light",
+      "ys.toml": "_ys_light",
+      "YScriptfile": "_ys_light"
+    }
+  }
+}
