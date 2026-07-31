@@ -79,7 +79,7 @@ connection.onInitialize((_params: InitializeParams): InitializeResult => {
 });
 
 connection.onInitialized(() => {
-  connection.console.log('YScript LSP 服务器已启动 (v2)');
+  connection.console.log('YScript LSP 服务器已启动 (v3)');
 });
 
 // ---------------- 辅助类型 ----------------
@@ -120,13 +120,13 @@ function isInsideStringOrComment(text: string, offset: number): boolean {
     if (inLineComment) {
       if (ch === '\n') inLineComment = false;
     } else if (inBlockComment) {
-      if (ch === '*' && text[i + 1] === '/') { inBlockComment = false; i++; }
+      if (ch === '*' && text[i + 1] === '#') { inBlockComment = false; i++; }
     } else if (inString) {
       if (ch === '\\' && i + 1 < offset) i++;
       else if (ch === stringChar) inString = false;
     } else {
-      if (ch === '/' && text[i + 1] === '/') { inLineComment = true; i++; }
-      else if (ch === '/' && text[i + 1] === '*') { inBlockComment = true; i++; }
+      if (ch === '#' && text[i + 1] !== '*') { inLineComment = true; i++; }
+      else if (ch === '#' && text[i + 1] === '*') { inBlockComment = true; i++; }
       else if (ch === '"' || ch === '`') { inString = true; stringChar = ch; }
     }
     i++;
@@ -294,7 +294,7 @@ function analyzeDocument(doc: TextDocument): {
       const end: Position = { line: i, character: startChar + name.length };
       symbols.push({
         name,
-        kind: m[1] === 'struct' ? SymbolKind.Struct : m[1] === 'class' ? SymbolKind.Class : m[1] === 'enum' ? SymbolKind.Enum : SymbolKind.Interface,
+        kind: m[1] === 'struct' ? SymbolKind.Struct : m[1] === 'enum' ? SymbolKind.Enum : SymbolKind.Interface,
         range: { start: { line: i, character: 0 }, end: { line: i, character: line.length } },
         selectionRange: { start, end },
         detail: m[1],
@@ -740,7 +740,7 @@ function formatYScript(text: string, tabSize: number): TextEdit[] {
     // 空行
     if (trimmed.length === 0) { out.push(''); continue; }
     // 注释
-    if (trimmed.startsWith('//') || trimmed.startsWith('/*')) {
+    if (trimmed.startsWith('#') || trimmed.startsWith('#*')) {
       out.push(indent.repeat(depth) + trimmed);
       continue;
     }

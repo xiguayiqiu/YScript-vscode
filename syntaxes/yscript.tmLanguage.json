@@ -3,9 +3,10 @@
   "name": "YScript",
   "scopeName": "source.yscript",
   "fileTypes": ["ys", "yscript"],
-  "firstLineMatch": "^#!/.*\\byscript\\b",
+  "firstLineMatch": "^#!",
   "patterns": [
     { "include": "#comment" },
+    { "include": "#preprocessor" },
     { "include": "#bytes-literal" },
     { "include": "#shell-command" },
     { "include": "#strings" },
@@ -14,6 +15,7 @@
     { "include": "#test-operators" },
     { "include": "#keywords" },
     { "include": "#types" },
+    { "include": "#builtins" },
     { "include": "#operators" },
     { "include": "#punctuation" },
     { "include": "#identifiers" }
@@ -28,16 +30,30 @@
         { "include": "#identifier" }
       ]
     },
+    "preprocessor": {
+      "patterns": [
+        {
+          "name": "keyword.control.preprocessor.yscript",
+          "match": "^#[!]?[a-zA-Z]+\\b"
+        },
+        {
+          "name": "keyword.control.preprocessor.yscript",
+          "match": "^#permit\\b"
+        }
+      ]
+    },
     "comment": {
       "patterns": [
         {
-          "name": "comment.line.double-slash.yscript",
-          "match": "//.*$"
+          "name": "comment.block.yscript",
+          "begin": "#\\*",
+          "end": "\\*#",
+          "beginCaptures": { "0": { "name": "punctuation.definition.comment.begin.yscript" } },
+          "endCaptures": { "0": { "name": "punctuation.definition.comment.end.yscript" } }
         },
         {
-          "name": "comment.block.yscript",
-          "begin": "/\\*",
-          "end": "\\*/"
+          "name": "comment.line.number-sign.yscript",
+          "match": "#.*$"
         }
       ]
     },
@@ -71,7 +87,7 @@
         },
         {
           "name": "support.function.shell.yscript",
-          "match": "(?<![A-Za-z0-9_\\-])(nc|nmap|curl|wget|python|python3|ping|bash|sh|ssh|scp|sed|awk|grep|cat|ls|cd|echo|mkdir|rm|chmod|chown|tar|gzip|unzip|xxd|hexdump|base64|openssl|iptables|netstat|ss|ifconfig|ip|nslookup|dig|host|traceroute|whois|hydra|sqlmap|metasploit|msfconsole|john|hashcat|gobuster|dirb|nikto|wpscan|aircrack|aireplay|airmon|airodump|kismet|ettercap|burpsuite|hashcat|hash-identifier|binwalk|foremost|exiftool|steghide|volatility|gdb|objdump|readelf|strace|ltrace|ndisasm|radare2|ghidra|ida|socat|ncat|netcat|ssh-keygen|keytool|certutil|nc\\.exe|powershell|cmd|reg|systeminfo|whoami|hostname|ipconfig|arp|route|tracert|type|copy|del|attrib|takeown|icacls|bitsadmin|wevtutil)(?![A-Za-z0-9_\\-])"
+          "match": "(?<![A-Za-z0-9_\\-])(nc|nmap|curl|wget|python|python3|ping|bash|sh|ssh|scp|sed|awk|grep|cat|ls|cd|echo|mkdir|rm|chmod|chown|tar|gzip|unzip|xxd|hexdump|base64|openssl|iptables|netstat|ss|ifconfig|ip|nslookup|dig|host|traceroute|whois|hydra|sqlmap|gobuster|dirb|nikto|wpscan|aircrack|john|hashcat|powershell|cmd|reg|systeminfo|hostname|ipconfig|arp|route|tracert|find|xargs|tee|sort|uniq|wc|head|tail|strings|objdump|readelf|ltrace|strace|tcpdump|msfconsole|msfvenom|searchsploit|responder|bettercap)(?![A-Za-z0-9_\\-])"
         }
       ]
     },
@@ -83,6 +99,10 @@
         {
           "name": "constant.character.escape.yscript",
           "match": "\\\\([abfnrtv\\\\\"'\\?0]|x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|[0-7]{1,3})"
+        },
+        {
+          "name": "variable.interpolation.yscript",
+          "match": "\\{[^{}]*\\}"
         }
       ]
     },
@@ -137,18 +157,22 @@
         {
           "name": "constant.language.nil.yscript",
           "match": "\\b(nil|nan|inf)\\b"
+        },
+        {
+          "name": "constant.language.global.yscript",
+          "match": "\\b(LAST_EXIT_CODE|__FILE__|__LINE__|OS|ARCH|VERSION|ENV)\\b"
         }
       ]
     },
     "test-operators": {
       "name": "keyword.operator.test.yscript",
-      "match": "(?<![A-Za-z0-9_\\-])-(e|f|d|r|w|x|s|L|h|b|c|p|S|z|n|eq|ne|gt|lt|ge|le)(?![A-Za-z0-9_\\-])"
+      "match": "(?<![A-Za-z0-9_\\-])-(e|f|d|r|w|x|s|L|h|b|c|p|S|u|g|k|z|n|nt|ot|ef|eq|ne|gt|lt|ge|le|a|o)(?![A-Za-z0-9_\\-])|--\\w+"
     },
     "operators": {
       "patterns": [
         {
           "name": "keyword.operator.logical.yscript",
-          "match": "(\\|>|&&|\\|\\|)"
+          "match": "(\\|>|\\?\\.|\\?\\?)"
         },
         {
           "name": "keyword.operator.assignment.yscript",
@@ -172,7 +196,7 @@
         },
         {
           "name": "keyword.operator.yscript",
-          "match": "(\\?\\.|\\.|\\?|@|::|=>)"
+          "match": "(?:\\.\\.\\.?|->|@>|@|::)"
         }
       ]
     },
@@ -180,7 +204,7 @@
       "patterns": [
         {
           "name": "punctuation.definition.yscript",
-          "match": "[{}()\\[\\];,|>]"
+          "match": "[{}()\\[\\];,:]"
         }
       ]
     },
@@ -188,15 +212,15 @@
       "patterns": [
         {
           "name": "keyword.control.flow.yscript",
-          "match": "\\b(if|else|elif|switch|case|default|for|while|loop|do|break|continue|return|yield|goto|try|catch|finally|raise|assert|defer|match)\\b"
+          "match": "\\b(if|else|elif|switch|case|default|match|for|while|loop|in|range|break|continue|goto|return|yield|defer)\\b"
         },
         {
           "name": "keyword.control.import.yscript",
-          "match": "\\b(import|package|using|as|namespace|in|range)\\b"
+          "match": "\\b(import|package|as)\\b"
         },
         {
           "name": "keyword.declaration.yscript",
-          "match": "\\b(let|const|var|func|init|class|struct|enum|interface|warp)\\b"
+          "match": "\\b(let|const|func|init|main|struct|enum|interface|warp)\\b"
         },
         {
           "name": "keyword.operator.logical.yscript",
@@ -207,8 +231,20 @@
           "match": "\\b(matches|is)\\b"
         },
         {
+          "name": "keyword.control.exception.yscript",
+          "match": "\\b(panic|recover|assert)\\b"
+        },
+        {
           "name": "keyword.other.unit.yscript",
-          "match": "\\b(new|self|this)\\b"
+          "match": "\\b(this|self)\\b"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.yscript",
+          "match": "\\b(print|println|printf|sprintf|len|type|string|int|float|bool|bytes|hex|byte|char|eval|next|ipv4|ipv6)\\b"
         }
       ]
     },
@@ -216,7 +252,7 @@
       "patterns": [
         {
           "name": "storage.type.yscript",
-          "match": "\\b(byte|char|short|ushort|int|uint|long|ulong|float|double|bool|string|bytes|list|dict|ipv4|ipv6|map|command|error|void)\\b"
+          "match": "\\b(byte|char|short|ushort|int|uint|long|ulong|float|double|bool|string|bytes|list|dict|ipv4|ipv6|error|nil|void|any)\\b"
         }
       ]
     }

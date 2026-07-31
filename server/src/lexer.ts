@@ -31,13 +31,13 @@ export interface Token {
 }
 
 const KEYWORDS = new Set([
-  'let', 'const', 'var', 'func', 'init', 'class', 'struct', 'enum',
-  'interface', 'map', 'if', 'else', 'elif', 'switch', 'case', 'default',
-  'for', 'in', 'range', 'while', 'loop', 'do', 'break', 'continue',
-  'return', 'yield', 'goto', 'try', 'catch', 'finally', 'raise', 'assert',
-  'defer', 'match', 'warp', 'import', 'package', 'using', 'as',
-  'namespace', 'and', 'or', 'not', 'xor', 'matches', 'is', 'new',
-  'self', 'this',
+  'let', 'const', 'func', 'struct', 'enum', 'interface',
+  'if', 'else', 'elif', 'switch', 'case', 'default',
+  'for', 'in', 'range', 'while', 'loop', 'break', 'continue',
+  'return', 'yield', 'goto', 'assert',
+  'defer', 'match', 'warp', 'import', 'package', 'as',
+  'and', 'or', 'not', 'xor', 'matches', 'is',
+  'this', 'main', 'init', 'panic', 'recover',
 ]);
 
 const TYPES = new Set([
@@ -47,29 +47,17 @@ const TYPES = new Set([
 ]);
 
 const BUILTINS = new Set([
-  'print', 'println', 'printf', 'sprintf', 'read', 'readln',
-  'len', 'range', 'append', 'delete', 'exists', 'keys', 'values',
-  'push', 'pop', 'shift', 'unshift', 'slice', 'join', 'split',
-  'int', 'float', 'string', 'bool', 'byte', 'char', 'bytes',
-  'hex', 'oct', 'bin', 'ord', 'chr',
-  'errors', 'panic', 'assert', 'type', 'typeof', 'isnil', 'sizeof',
-  'ipv4', 'ipv6', 'cidr',
-  'json', 'regex', 'base64', 'hex_encode', 'hex_decode', 'url_encode', 'url_decode',
-  'time', 'now', 'sleep', 'open', 'close', 'read_file', 'write_file',
-  'file_exists', 'is_dir', 'is_file', 'glob', 'walk', 'md5', 'sha1', 'sha256',
-  'hmac', 'encrypt', 'decrypt', 'rand', 'random',
-  'list', 'dict', 'tuple', 'set', 'frozenset',
-  'http_get', 'http_post', 'tcp_connect', 'udp_send', 'ssl_connect',
-  'warp', 'channel', 'mutex', 'rwlock', 'semaphore', 'waitgroup',
-  'log_info', 'log_warn', 'log_error', 'log_debug', 'log_trace',
-  'stdin', 'stdout', 'stderr', 'env', 'args', 'argv', 'exit', 'abort',
-  'getenv', 'setenv', 'unsetenv', 'shell', 'system', 'exec', 'spawn',
-  'socket', 'bind', 'listen', 'accept', 'connect', 'send', 'recv',
-  'malloc', 'free', 'memcpy', 'memset', 'pointer', 'deref', 'ref',
-  'ffi_call', 'dll_load', 'dll_sym', 'reflect', 'call', 'invoke',
-  'version', 'platform', 'os', 'arch', 'cwd', 'chdir', 'mkdir', 'rmdir',
-  'ls', 'cp', 'mv', 'rm', 'touch', 'cat', 'head', 'tail', 'wc', 'grep',
-  'awk', 'sed', 'sort', 'uniq', 'tr', 'cut', 'tee', 'xargs',
+  'print', 'println', 'printf', 'sprintf',
+  'len', 'type', 'eval', 'next',
+  'string', 'int', 'float', 'bool', 'byte', 'char', 'bytes', 'hex',
+  'ipv4', 'ipv6',
+  'panic', 'recover', 'assert',
+  'json', 'regex', 'encoding',
+  'net', 'io', 'os', 'sys', 'path', 'strings', 'binary',
+  'crypto', 'aes', 'rsa', 'ssl', 'raw', 'ffi',
+  'sync', 'time', 'rand', 'log', 'stdio', 'color',
+  'yaml', 'toml', 'ini',
+  'reflect', 'errors', 'compress', 'cuda',
 ]);
 
 const LITERALS = new Set(['true', 'false', 'nil', 'nan', 'inf']);
@@ -103,18 +91,18 @@ export function tokenize(source: string): Token[] {
       continue;
     }
 
-    // 行注释
-    if (ch === '/' && source[i + 1] === '/') {
+    // 行注释 (# ...)
+    if (ch === '#' && source[i + 1] !== '*') {
       let j = i;
       while (j < len && source[j] !== '\n') j++;
       push('comment', source.slice(i, j), start, j, startLine, startCol);
       col += (j - i); i = j;
       continue;
     }
-    // 块注释
-    if (ch === '/' && source[i + 1] === '*') {
+    // 块注释 (#* ... *#)
+    if (ch === '#' && source[i + 1] === '*') {
       let j = i + 2;
-      while (j < len && !(source[j] === '*' && source[j + 1] === '/')) {
+      while (j < len && !(source[j] === '*' && source[j + 1] === '#')) {
         if (source[j] === '\n') { line++; col = 1; j++; continue; }
         j++;
       }

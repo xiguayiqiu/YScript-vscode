@@ -4,32 +4,38 @@
     "body": [
       "package main",
       "",
-      "func main() {",
+      "func main(args) {",
       "\t${0}",
+      "\treturn 0",
       "}",
       ""
     ],
-    "description": "package main + main 函数"
+    "description": "package main + main(args) 入口"
   },
   "function": {
     "prefix": "func",
     "body": [
-      "func ${1:name}(${2:args}) {",
+      "func ${1:name}(${2:params}) {",
       "\t${0}",
       "}",
       ""
     ],
     "description": "函数定义"
   },
-  "function with return": {
+  "function return": {
     "prefix": "funcr",
     "body": [
-      "func ${1:name}(${2:args}) {",
+      "func ${1:name}(${2:params}) -> ${3:ret_type} {",
       "\treturn ${0}",
       "}",
       ""
     ],
     "description": "带返回值的函数"
+  },
+  "arrow function": {
+    "prefix": "arrow",
+    "body": ["(${1:params}) -> ${0:expr}"],
+    "description": "箭头函数简写"
   },
   "if": {
     "prefix": "if",
@@ -39,7 +45,7 @@
       "}",
       ""
     ],
-    "description": "if 块"
+    "description": "if 条件"
   },
   "if else": {
     "prefix": "ifelse",
@@ -51,17 +57,51 @@
       "}",
       ""
     ],
-    "description": "if-else 块"
+    "description": "if-else 条件"
   },
-  "for range": {
-    "prefix": "forr",
+  "if elif else": {
+    "prefix": "ifelif",
     "body": [
-      "for ${1:i} in ${2:range(0, 10)} {",
+      "if ${1:cond1} {",
+      "\t${2}",
+      "} elif ${3:cond2} {",
+      "\t${4}",
+      "} else {",
       "\t${0}",
       "}",
       ""
     ],
-    "description": "for 循环（范围）"
+    "description": "if-elif-else 多分支"
+  },
+  "if test file": {
+    "prefix": "ifile",
+    "body": [
+      "if -e \"${1:/path/to/file}\" {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "if -e 检查文件存在"
+  },
+  "if test dir": {
+    "prefix": "idir",
+    "body": [
+      "if -d \"${1:/path/to/dir}\" {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "if -d 检查目录存在"
+  },
+  "for range": {
+    "prefix": "forr",
+    "body": [
+      "for ${1:i} in ${2:0}..${3:10} {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "for 循环(范围)"
   },
   "for list": {
     "prefix": "forl",
@@ -71,7 +111,7 @@
       "}",
       ""
     ],
-    "description": "for 循环（列表）"
+    "description": "for 循环(列表)"
   },
   "for dict": {
     "prefix": "ford",
@@ -81,7 +121,7 @@
       "}",
       ""
     ],
-    "description": "for 循环（字典）"
+    "description": "for 循环(字典)"
   },
   "while": {
     "prefix": "while",
@@ -107,97 +147,110 @@
     "prefix": "match",
     "body": [
       "match ${1:val} {",
-      "\t${2:pattern} => ${3:body}",
-      "\t_ => ${0:default}",
+      "\t${2:pattern} { ${3:body} }",
+      "\t_ { ${0:default} }",
       "}",
       ""
     ],
     "description": "match 模式匹配"
   },
-  "try catch": {
-    "prefix": "try",
+  "defer": {
+    "prefix": "defer",
     "body": [
-      "try {",
-      "\t${1}",
-      "} catch ${2:e} {",
-      "\tprintln(e)",
-      "} finally {",
+      "defer func() {",
       "\t${0}",
-      "}",
+      "}()",
       ""
     ],
-    "description": "try-catch-finally 块"
+    "description": "defer 延迟执行"
+  },
+  "defer recover": {
+    "prefix": "drec",
+    "body": [
+      "defer func() {",
+      "\tif r = recover(); r != nil {",
+      "\t\tlog.error(\"崩溃恢复: {r}\")",
+      "\t}",
+      "}()",
+      ""
+    ],
+    "description": "defer + recover 防止崩溃"
   },
   "warp": {
     "prefix": "warp",
     "body": [
-      "warp func() {",
+      "let ${1:h} = warp {",
       "\t${0}",
       "}",
       ""
     ],
-    "description": "启动并发协程"
+    "description": "启动并发 warp 线程"
+  },
+  "warp await": {
+    "prefix": "wawait",
+    "body": [
+      "let ${1:h} = warp {",
+      "\treturn ${2:result}",
+      "}",
+      "let ${3:result} = ${1:h}.await()",
+      ""
+    ],
+    "description": "warp + await 取结果"
   },
   "shell command": {
     "prefix": "shell",
-    "body": [
-      "`${1:command}`"
-    ],
-    "description": "Shell 命令块"
+    "body": ["`${1:command}`"],
+    "description": "Shell 命令反引号"
   },
   "shell with var": {
-    "prefix": "shellvar",
+    "prefix": "sv",
     "body": [
-      "let ${1:result} = `\\${${2:cmd}}`"
+      "let ${1:result} = `${2:command}`"
     ],
     "description": "Shell 命令赋值给变量"
   },
   "bytes hex": {
-    "prefix": "bytes",
-    "body": [
-      "b\"\\x${1:90}\\x${2:cc}\""
-    ],
+    "prefix": "bx",
+    "body": ["b\"\\\\x${1:90}\\\\x${2:cc}\""],
     "description": "bytes 十六进制字面量"
   },
   "bytes base64": {
     "prefix": "b64",
-    "body": [
-      "b\"base64:${1:SGVsbG8=}\""
-    ],
+    "body": ["b\"base64:${1:SGVsbG8=}\""],
     "description": "bytes Base64 字面量"
   },
   "import": {
     "prefix": "imp",
-    "body": [
-      "import \"${1:path}\""
-    ],
-    "description": "import 路径"
+    "body": ["import \"${1:path}\""],
+    "description": "import 导入模块"
   },
   "struct": {
-    "prefix": "struct",
+    "prefix": "st",
     "body": [
       "struct ${1:Name} {",
-      "\t${0}",
+      "\t${2:field}: ${3:type}",
       "}",
       ""
     ],
     "description": "结构体定义"
   },
-  "class": {
-    "prefix": "class",
+  "struct method": {
+    "prefix": "stm",
     "body": [
-      "class ${1:Name} {",
+      "func this.${1:method}(${2:args}) {",
       "\t${0}",
       "}",
       ""
     ],
-    "description": "类定义"
+    "description": "结构体方法 (this.method)"
   },
   "enum": {
-    "prefix": "enum",
+    "prefix": "en",
     "body": [
       "enum ${1:Name} {",
-      "\t${0}",
+      "\t${2:A},",
+      "\t${3:B},",
+      "\t${4:C}",
       "}",
       ""
     ],
@@ -207,39 +260,87 @@
     "prefix": "iface",
     "body": [
       "interface ${1:Name} {",
-      "\t${0}",
+      "\t${2:method}(${3:params})",
       "}",
       ""
     ],
     "description": "接口定义"
   },
-  "channel": {
-    "prefix": "ch",
-    "body": [
-      "let ${1:ch} = channel(${2:size})"
-    ],
-    "description": "创建通道"
+  "let": {
+    "prefix": "let",
+    "body": ["let ${1:name} = ${0:value}"],
+    "description": "let 变量声明"
   },
-  "mutex": {
-    "prefix": "mtx",
+  "let typed": {
+    "prefix": "lett",
+    "body": ["let ${1:name}: ${2:type} = ${0:value}"],
+    "description": "带类型注解的 let 声明"
+  },
+  "const": {
+    "prefix": "const",
+    "body": ["const ${1:NAME} = ${0:value}"],
+    "description": "const 常量声明"
+  },
+  "printf": {
+    "prefix": "pf",
+    "body": ["printf(\"${1:%s}\\\n\", ${0:args})"],
+    "description": "格式化输出"
+  },
+  "http get": {
+    "prefix": "hget",
     "body": [
-      "let ${1:m} = mutex()"
+      "let ${1:resp} = net.HTTPGet(\"${2:url}\")",
+      "if ${1:resp}.ok {",
+      "\tprintln(${1:resp}.body)",
+      "}",
+      ""
     ],
-    "description": "创建互斥锁"
+    "description": "HTTP GET 请求"
+  },
+  "port scan": {
+    "prefix": "pscan",
+    "body": [
+      "for port in ${1:[22, 80, 443, 3306, 8080]} {",
+      "\tlet conn = net.DialTimeout(\"${2:host}:\" + string(port), 2)",
+      "\tif conn != nil {",
+      "\t\tconn.close()",
+      "\t\tprintln.green(\"[+] port \" + string(port) + \" open\")",
+      "\t}",
+      "}",
+      ""
+    ],
+    "description": "端口扫描"
+  },
+  "shell port scan": {
+    "prefix": "sscan",
+    "body": [
+      "for port in ${1:[22, 80, 443, 8080]} {",
+      "\t`nc -z -w1 ${2:target} ` + string(port)",
+      "\tif LAST_EXIT_CODE == 0 {",
+      "\t\tprintln.green(\"[+] port \" + string(port) + \" open\")",
+      "\t}",
+      "}",
+      ""
+    ],
+    "description": "Shell nc 端口扫描"
   },
   "comment": {
-    "prefix": "//",
-    "body": ["// ${0}"],
-    "description": "行注释"
+    "prefix": "#",
+    "body": ["# ${0}"],
+    "description": "行注释 (#)"
   },
-  "block comment": {
-    "prefix": "/*",
-    "body": ["/*", " * ${0}", " */"],
-    "description": "块注释"
+  "comment block": {
+    "prefix": "#*",
+    "body": [
+      "#*",
+      " * ${0}",
+      " *#"
+    ],
+    "description": "块注释 (#* ... *#)"
   },
   "TODO": {
     "prefix": "todo",
-    "body": ["// TODO: ${0}"],
+    "body": ["# TODO: ${0}"],
     "description": "TODO 注释"
   }
 }

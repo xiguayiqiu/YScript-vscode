@@ -1,7 +1,7 @@
 {
   "comments": {
-    "lineComment": "//",
-    "blockComment": ["/*", "*/"]
+    "lineComment": "#",
+    "blockComment": ["#*", "*#"]
   },
   "brackets": [
     ["{", "}"],
@@ -24,8 +24,8 @@
     ["`", "`"]
   ],
   "indentationRules": {
-    "increaseIndentPattern": "^((?!//).)*(\\{[^}\"'`]*|\\([^)\"'`]*|\\[[^\\]\"'`]*)$",
-    "decreaseIndentPattern": "^\\s*[\\}\\)]"
+    "increaseIndentPattern": "^((?!#).)*(\\{[^}\"'`]*|\\([^)\"'`]*|\\[[^\\]\"'`]*)$",
+    "decreaseIndentPattern": "^\\s*[\\}\\)\\]]"
   },
-  "wordPattern": "(-?\\d*\\.\\d\\w*|\\w+)"
+  "wordPattern": "(-?\\d*\\.\\d\\w*|[A-Za-z_][A-Za-z0-9_]*)"
 }

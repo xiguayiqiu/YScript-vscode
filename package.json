@@ -1,21 +1,24 @@
 {
   "name": "yscript",
   "displayName": "YScript",
-  "description": "YScript 语言支持：语法高亮、LSP 智能补全、代码片段（网安专用脚本语言）",
-  "version": "0.1.0",
+  "description": "YScript 语言支持：语法高亮、LSP 智能补全、悬停文档、跳转定义、代码片段（网安专用脚本语言）",
+  "version": "0.2.0",
   "publisher": "yscript",
   "icon": "icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Programming Languages"
+    "Programming Languages",
+    "Snippets"
   ],
   "keywords": [
     "yscript",
     "security",
     "shell",
-    "pentest"
+    "pentest",
+    "InfoSec",
+    "scripting"
   ],
   "main": "./client/out/extension.js",
   "activationEvents": [
@@ -25,14 +28,8 @@
     "languages": [
       {
         "id": "yscript",
-        "aliases": [
-          "YScript",
-          "yscript"
-        ],
-        "extensions": [
-          ".ys",
-          ".yscript"
-        ],
+        "aliases": ["YScript", "yscript"],
+        "extensions": [".ys", ".yscript"],
         "filenames": [],
         "configuration": "./language-configuration.json"
       }
@@ -68,11 +65,7 @@
         },
         "yscript.server.trace": {
           "type": "string",
-          "enum": [
-            "off",
-            "messages",
-            "verbose"
-          ],
+          "enum": ["off", "messages", "verbose"],
           "default": "off",
           "description": "LSP 通信追踪级别"
         },
@@ -101,5 +94,10 @@
     "vscode-languageclient": "^10.1.0",
     "vscode-languageserver": "^8.1.0",
     "vscode-languageserver-textdocument": "^1.0.11"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xiguayiqiu/YScript-vscode"
+  },
+  "license": "Apache-2.0"
 }
