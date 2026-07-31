@@ -56,6 +56,15 @@ for (const m of ALL_COMPLETIONS) {
   HOVER_INDEX.set(m.label, m);
 }
 
+// TYPE_MEMBERS 是扁平数组，按 of（所属类型）分组，便于成员补全查找
+const TYPE_MEMBERS_BY_TYPE = new Map<string, CompletionItemMeta[]>();
+for (const m of TYPE_MEMBERS) {
+  const key = m.of ?? '';
+  const list = TYPE_MEMBERS_BY_TYPE.get(key) ?? [];
+  list.push(m);
+  TYPE_MEMBERS_BY_TYPE.set(key, list);
+}
+
 connection.onInitialize((_params: InitializeParams): InitializeResult => {
   return {
     capabilities: {
@@ -592,7 +601,7 @@ function getMemberCompletions(doc: TextDocument, text: string, dotOffset: number
   }
 
   for (const t of candidateTypes) {
-    const ms = TYPE_MEMBERS[t];
+    const ms = TYPE_MEMBERS_BY_TYPE.get(t);
     if (!ms) continue;
     for (const m of ms) {
       members.push({
@@ -691,8 +700,8 @@ connection.onSignatureHelp((params: SignatureHelpParams): SignatureHelp | null =
   }
 
   // 查签名
-  const meta = HOVER_INDEX.get(callName.split('.').pop() || '');
-  if (!meta || !meta.signature) {
+  const meta = HOVER_INDEX.get(callName) ?? HOVER_INDEX.get(callName.split('.').pop() || '');
+  if (!meta) {
     // 用户定义函数
     const { funcs } = analyzeDocument(doc);
     const f = funcs.get(callName);
@@ -705,12 +714,28 @@ connection.onSignatureHelp((params: SignatureHelpParams): SignatureHelp | null =
     }
     return null;
   }
+  const signature = metaSignature(meta);
   const sig: SignatureInformation = {
-    label: meta.signature,
-    parameters: meta.signature.match(/[A-Za-z_][A-Za-z0-9_]*\s*\??/g)?.slice(0, 3).map(p => ParameterInformation.create(p)) ?? [],
+    label: signature,
+    parameters: signature.match(/[A-Za-z_][A-Za-z0-9_]*\s*\??/g)?.slice(0, 3).map(p => ParameterInformation.create(p)) ?? [],
   };
   return { signatures: [sig], activeSignature: 0, activeParameter: paramIdx };
 });
+
+/** 从补全元数据推导函数签名 */
+function metaSignature(m: CompletionItemMeta): string {
+  if (m.signature) return m.signature;
+  // 从 insertText 提取：如 "println(${0})" / "net.Dial(${1:host}, ${2:port})"
+  const m2 = /^([A-Za-z_][A-Za-z0-9_.]*)\s*\(([^)]*)\)/.exec(m.insertText ?? '');
+  if (m2) {
+    const args = m2[2]
+      .split(',')
+      .map((p) => p.trim())
+      .filter((p) => p && p !== '${0}');
+    return `${m2[1]}(${args.join(', ')})`;
+  }
+  return `${m.label}(...)`;
+}
 
 // ---------------- 格式化 ----------------
 
@@ -794,18 +819,20 @@ function completionKind(k: CompletionKind): CompletionItemKind {
   switch (k) {
     case 'keyword': return CompletionItemKind.Keyword;
     case 'type': return CompletionItemKind.TypeParameter;
-    case 'function': return CompletionItemKind.Function;
-    case 'method': return CompletionItemKind.Method;
-    case 'variable': return CompletionItemKind.Variable;
     case 'constant': return CompletionItemKind.Constant;
-    case 'field': return CompletionItemKind.Field;
+    case 'builtin': return CompletionItemKind.Function;
+    case 'method': return CompletionItemKind.Method;
+    case 'property': return CompletionItemKind.Property;
     case 'snippet': return CompletionItemKind.Snippet;
+    case 'function': return CompletionItemKind.Function;
+    case 'variable': return CompletionItemKind.Variable;
+    case 'field': return CompletionItemKind.Field;
     case 'class': return CompletionItemKind.Class;
     case 'struct': return CompletionItemKind.Struct;
     case 'enum': return CompletionItemKind.Enum;
     case 'interface': return CompletionItemKind.Interface;
     case 'module': return CompletionItemKind.Module;
-    case 'property': return CompletionItemKind.Property;
+    default: return CompletionItemKind.Text;
   }
 }
 

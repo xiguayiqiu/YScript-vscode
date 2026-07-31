@@ -16,6 +16,14 @@ const HOVER_INDEX = new Map();
 for (const m of ALL_COMPLETIONS) {
     HOVER_INDEX.set(m.label, m);
 }
+// TYPE_MEMBERS 是扁平数组，按 of（所属类型）分组，便于成员补全查找
+const TYPE_MEMBERS_BY_TYPE = new Map();
+for (const m of keywords_1.TYPE_MEMBERS) {
+    const key = m.of ?? '';
+    const list = TYPE_MEMBERS_BY_TYPE.get(key) ?? [];
+    list.push(m);
+    TYPE_MEMBERS_BY_TYPE.set(key, list);
+}
 connection.onInitialize((_params) => {
     return {
         capabilities: {
@@ -38,7 +46,7 @@ connection.onInitialize((_params) => {
     };
 });
 connection.onInitialized(() => {
-    connection.console.log('YScript LSP 服务器已启动 (v2)');
+    connection.console.log('YScript LSP 服务器已启动 (v3)');
 });
 /** 字符串/注释内的位置 */
 function isInsideStringOrComment(text, offset) {
@@ -54,7 +62,7 @@ function isInsideStringOrComment(text, offset) {
                 inLineComment = false;
         }
         else if (inBlockComment) {
-            if (ch === '*' && text[i + 1] === '/') {
+            if (ch === '*' && text[i + 1] === '#') {
                 inBlockComment = false;
                 i++;
             }
@@ -66,11 +74,11 @@ function isInsideStringOrComment(text, offset) {
                 inString = false;
         }
         else {
-            if (ch === '/' && text[i + 1] === '/') {
+            if (ch === '#' && text[i + 1] !== '*') {
                 inLineComment = true;
                 i++;
             }
-            else if (ch === '/' && text[i + 1] === '*') {
+            else if (ch === '#' && text[i + 1] === '*') {
                 inBlockComment = true;
                 i++;
             }
@@ -244,7 +252,7 @@ function analyzeDocument(doc) {
             const end = { line: i, character: startChar + name.length };
             symbols.push({
                 name,
-                kind: m[1] === 'struct' ? node_1.SymbolKind.Struct : m[1] === 'class' ? node_1.SymbolKind.Class : m[1] === 'enum' ? node_1.SymbolKind.Enum : node_1.SymbolKind.Interface,
+                kind: m[1] === 'struct' ? node_1.SymbolKind.Struct : m[1] === 'enum' ? node_1.SymbolKind.Enum : node_1.SymbolKind.Interface,
                 range: { start: { line: i, character: 0 }, end: { line: i, character: line.length } },
                 selectionRange: { start, end },
                 detail: m[1],
@@ -532,7 +540,7 @@ function getMemberCompletions(doc, text, dotOffset) {
         candidateTypes.push('list', 'string', 'dict', 'bytes', 'int', 'float', 'socket');
     }
     for (const t of candidateTypes) {
-        const ms = keywords_1.TYPE_MEMBERS[t];
+        const ms = TYPE_MEMBERS_BY_TYPE.get(t);
         if (!ms)
             continue;
         for (const m of ms) {
@@ -643,8 +651,8 @@ connection.onSignatureHelp((params) => {
             paramIdx++;
     }
     // 查签名
-    const meta = HOVER_INDEX.get(callName.split('.').pop() || '');
-    if (!meta || !meta.signature) {
+    const meta = HOVER_INDEX.get(callName) ?? HOVER_INDEX.get(callName.split('.').pop() || '');
+    if (!meta) {
         // 用户定义函数
         const { funcs } = analyzeDocument(doc);
         const f = funcs.get(callName);
@@ -657,12 +665,28 @@ connection.onSignatureHelp((params) => {
         }
         return null;
     }
+    const signature = metaSignature(meta);
     const sig = {
-        label: meta.signature,
-        parameters: meta.signature.match(/[A-Za-z_][A-Za-z0-9_]*\s*\??/g)?.slice(0, 3).map(p => node_1.ParameterInformation.create(p)) ?? [],
+        label: signature,
+        parameters: signature.match(/[A-Za-z_][A-Za-z0-9_]*\s*\??/g)?.slice(0, 3).map(p => node_1.ParameterInformation.create(p)) ?? [],
     };
     return { signatures: [sig], activeSignature: 0, activeParameter: paramIdx };
 });
+/** 从补全元数据推导函数签名 */
+function metaSignature(m) {
+    if (m.signature)
+        return m.signature;
+    // 从 insertText 提取：如 "println(${0})" / "net.Dial(${1:host}, ${2:port})"
+    const m2 = /^([A-Za-z_][A-Za-z0-9_.]*)\s*\(([^)]*)\)/.exec(m.insertText ?? '');
+    if (m2) {
+        const args = m2[2]
+            .split(',')
+            .map((p) => p.trim())
+            .filter((p) => p && p !== '${0}');
+        return `${m2[1]}(${args.join(', ')})`;
+    }
+    return `${m.label}(...)`;
+}
 // ---------------- 格式化 ----------------
 connection.onDocumentFormatting((params) => {
     const doc = documents.get(params.textDocument.uri);
@@ -691,7 +715,7 @@ function formatYScript(text, tabSize) {
             continue;
         }
         // 注释
-        if (trimmed.startsWith('//') || trimmed.startsWith('/*')) {
+        if (trimmed.startsWith('#') || trimmed.startsWith('#*')) {
             out.push(indent.repeat(depth) + trimmed);
             continue;
         }
@@ -736,18 +760,20 @@ function completionKind(k) {
     switch (k) {
         case 'keyword': return node_1.CompletionItemKind.Keyword;
         case 'type': return node_1.CompletionItemKind.TypeParameter;
-        case 'function': return node_1.CompletionItemKind.Function;
-        case 'method': return node_1.CompletionItemKind.Method;
-        case 'variable': return node_1.CompletionItemKind.Variable;
         case 'constant': return node_1.CompletionItemKind.Constant;
-        case 'field': return node_1.CompletionItemKind.Field;
+        case 'builtin': return node_1.CompletionItemKind.Function;
+        case 'method': return node_1.CompletionItemKind.Method;
+        case 'property': return node_1.CompletionItemKind.Property;
         case 'snippet': return node_1.CompletionItemKind.Snippet;
+        case 'function': return node_1.CompletionItemKind.Function;
+        case 'variable': return node_1.CompletionItemKind.Variable;
+        case 'field': return node_1.CompletionItemKind.Field;
         case 'class': return node_1.CompletionItemKind.Class;
         case 'struct': return node_1.CompletionItemKind.Struct;
         case 'enum': return node_1.CompletionItemKind.Enum;
         case 'interface': return node_1.CompletionItemKind.Interface;
         case 'module': return node_1.CompletionItemKind.Module;
-        case 'property': return node_1.CompletionItemKind.Property;
+        default: return node_1.CompletionItemKind.Text;
     }
 }
 // ---------------- 启动 ----------------

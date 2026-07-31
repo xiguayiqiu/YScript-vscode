@@ -3,7 +3,11 @@
  * 供 LSP 补全、悬停、签名帮助使用。
  */
 
-export type CompletionKind = 'keyword' | 'type' | 'constant' | 'builtin' | 'method' | 'property' | 'snippet';
+export type CompletionKind =
+  | 'keyword' | 'type' | 'constant' | 'builtin' | 'method'
+  | 'property' | 'snippet'
+  | 'function' | 'variable' | 'field' | 'class'
+  | 'struct' | 'enum' | 'interface' | 'module';
 
 export interface CompletionItemMeta {
   label: string;
@@ -13,6 +17,10 @@ export interface CompletionItemMeta {
   sortKey?: number;
   /** method/property 属于哪个类型 */
   of?: string;
+  /** 函数签名（签名帮助用），缺省时由 insertText/label 推导 */
+  signature?: string;
+  /** 更详细的文档说明（markdown 用），缺省时回退到 detail */
+  documentation?: string;
 }
 
 export const KEYWORDS: CompletionItemMeta[] = [
@@ -419,18 +427,13 @@ export function buildAllCompletions(): CompletionItemMeta[] {
   return [...KEYWORDS, ...TYPES, ...BUILTIN_FUNCTIONS, ...SNIPPETS];
 }
 
-/** 构建悬停文档索引 */
-export function buildHoverDoc(word: string): string | null {
-  const all = buildAllCompletions();
-  for (const m of all) {
-    if (m.label === word) {
-      const kindLabel: Record<string, string> = {
-        keyword: '关键字', type: '类型', constant: '常量',
-        builtin: '内置函数', method: '方法', property: '属性'
-      };
-      const prefix = kindLabel[m.kind] || m.kind;
-      return `**${m.label}** — ${prefix}\n\n${m.detail}`;
-    }
-  }
-  return null;
+/** 构建悬停文档（markdown） */
+export function buildHoverDoc(m: CompletionItemMeta): string {
+  const kindLabel: Record<string, string> = {
+    keyword: '关键字', type: '类型', constant: '常量',
+    builtin: '内置函数', method: '方法', property: '属性', snippet: '代码片段',
+  };
+  const prefix = kindLabel[m.kind] || m.kind;
+  const doc = m.documentation || m.detail;
+  return `**${m.label}** — ${prefix}\n\n${doc}`;
 }
