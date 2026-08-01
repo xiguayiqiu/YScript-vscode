@@ -170,10 +170,14 @@
     },
     "operators": {
       "patterns": [
-        {
-          "name": "keyword.operator.logical.yscript",
-          "match": "(\\|>|\\?\\.|\\?\\?)"
-        },
+  {
+   "name": "keyword.operator.logical.yscript",
+   "match": "(\\|>|=>|\\?\\.|\\?\\?)"
+  },
+  {
+   "name": "keyword.operator.ternary.yscript",
+   "match": "\\?(?![.?])"
+  },
         {
           "name": "keyword.operator.assignment.yscript",
           "match": "(<<=|>>=|\\+=|-=|\\*=|/=|%=|&=|\\|=|\\^=|=)"

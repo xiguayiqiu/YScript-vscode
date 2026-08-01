@@ -9,7 +9,7 @@
 | 能力 | 说明 |
 |------|------|
 | 语法高亮 | 关键字、类型、内置函数、命名空间、字符串插值、Shell 反引号、bytes 字面量、注释、数字、常量、Test 表达式 |
-| 智能补全 | 关键字、类型、内置函数（150+）、struct 方法、dict/list 方法、import 路径 |
+| 智能补全 | 关键字、类型、内置函数（250+）、struct 方法（`func this.`）、warp/WaitGroup 成员、dict/list 方法、import 路径 |
 | 悬停文档 | 关键字/类型/内置函数的中文说明 |
 | 跳转定义 | 跳转到 `func`/`let`/`const`/`struct`/`enum`/`interface` 声明 |
 | 文档符号 | 大纲视图中显示函数、变量、类型 |
@@ -26,7 +26,8 @@
 | `arrow` | 箭头函数 | `defer` | defer 延迟执行 |
 | `if` / `ifelse` / `ifelif` | if 分支 | `drec` | defer+recover |
 | `forr` / `forl` / `ford` | for 循环 | `warp` / `wawait` | 并发线程 |
-| `match` | 模式匹配 | `shell` / `sv` | Shell 命令 |
+| `match` | 模式匹配（`=>` 分支） | `shell` / `sv` | Shell 命令 |
+| `tern` / `stm` / `mret` / `wsel` | 三元 / struct 方法 / 多返回值 / sync.select | `warp` / `wawait` | 并发线程 |
 | `st` / `stm` | struct/方法 | `bx` / `b64` | bytes 字面量 |
 | `en` / `iface` | enum/interface | `pscan` / `sscan` | 端口扫描 |
 | `let` / `lett` / `const` | 变量声明 | `hget` | HTTP GET |
@@ -50,16 +51,3 @@
 
 自动识别 `.ys` 和 `.yscript` 文件。
 
-## 安装
-
-```bash
-# 开发模式
-cd vscode
-npm install
-npm run compile
-# F5 启动调试
-
-# 打包
-npm run package
-# → yscript-0.1.0.vsix
-```

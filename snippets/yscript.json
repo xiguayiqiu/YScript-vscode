@@ -34,7 +34,9 @@
   },
   "arrow function": {
     "prefix": "arrow",
-    "body": ["(${1:params}) -> ${0:expr}"],
+    "body": [
+      "(${1:params}) -> ${0:expr}"
+    ],
     "description": "箭头函数简写"
   },
   "if": {
@@ -147,8 +149,8 @@
     "prefix": "match",
     "body": [
       "match ${1:val} {",
-      "\t${2:pattern} { ${3:body} }",
-      "\t_ { ${0:default} }",
+      "\t${2:pattern} => { ${3:body} }",
+      "\t_ => { ${0:default} }",
       "}",
       ""
     ],
@@ -182,6 +184,7 @@
       "let ${1:h} = warp {",
       "\t${0}",
       "}",
+      "${1:h}.await()",
       ""
     ],
     "description": "启动并发 warp 线程"
@@ -199,7 +202,9 @@
   },
   "shell command": {
     "prefix": "shell",
-    "body": ["`${1:command}`"],
+    "body": [
+      "`${1:command}`"
+    ],
     "description": "Shell 命令反引号"
   },
   "shell with var": {
@@ -211,17 +216,23 @@
   },
   "bytes hex": {
     "prefix": "bx",
-    "body": ["b\"\\\\x${1:90}\\\\x${2:cc}\""],
+    "body": [
+      "b\"\\\\x${1:90}\\\\x${2:cc}\""
+    ],
     "description": "bytes 十六进制字面量"
   },
   "bytes base64": {
     "prefix": "b64",
-    "body": ["b\"base64:${1:SGVsbG8=}\""],
+    "body": [
+      "b\"base64:${1:SGVsbG8=}\""
+    ],
     "description": "bytes Base64 字面量"
   },
   "import": {
     "prefix": "imp",
-    "body": ["import \"${1:path}\""],
+    "body": [
+      "import \"${1:path}\""
+    ],
     "description": "import 导入模块"
   },
   "struct": {
@@ -268,22 +279,30 @@
   },
   "let": {
     "prefix": "let",
-    "body": ["let ${1:name} = ${0:value}"],
+    "body": [
+      "let ${1:name} = ${0:value}"
+    ],
     "description": "let 变量声明"
   },
   "let typed": {
     "prefix": "lett",
-    "body": ["let ${1:name}: ${2:type} = ${0:value}"],
+    "body": [
+      "let ${1:name}: ${2:type} = ${0:value}"
+    ],
     "description": "带类型注解的 let 声明"
   },
   "const": {
     "prefix": "const",
-    "body": ["const ${1:NAME} = ${0:value}"],
+    "body": [
+      "const ${1:NAME} = ${0:value}"
+    ],
     "description": "const 常量声明"
   },
   "printf": {
     "prefix": "pf",
-    "body": ["printf(\"${1:%s}\\\n\", ${0:args})"],
+    "body": [
+      "printf(\"${1:%s}\\\n\", ${0:args})"
+    ],
     "description": "格式化输出"
   },
   "http get": {
@@ -326,7 +345,9 @@
   },
   "comment": {
     "prefix": "#",
-    "body": ["# ${0}"],
+    "body": [
+      "# ${0}"
+    ],
     "description": "行注释 (#)"
   },
   "comment block": {
@@ -340,7 +361,45 @@
   },
   "TODO": {
     "prefix": "todo",
-    "body": ["# TODO: ${0}"],
+    "body": [
+      "# TODO: ${0}"
+    ],
     "description": "TODO 注释"
+  },
+  "ternary": {
+    "prefix": "tern",
+    "description": "三元表达式",
+    "body": [
+      "${1:cond} ? ${2:a} : ${3:b}"
+    ]
+  },
+  "method": {
+    "prefix": "stm",
+    "description": "struct 方法 (this)",
+    "body": [
+      "func this.${1:name}(${2:args}) {",
+      "\t${0}",
+      "}",
+      ""
+    ]
+  },
+  "multiret": {
+    "prefix": "mret",
+    "description": "多返回值",
+    "body": [
+      "func ${1:name}() {",
+      "\treturn ${2:a}, ${3:b}",
+      "}",
+      "let ${4:x}, ${5:y} = ${1:name}()",
+      ""
+    ]
+  },
+  "wselect": {
+    "prefix": "wsel",
+    "description": "sync.select 通道选择",
+    "body": [
+      "let ${1:r} = sync.select(sync.case(${2:ch}, ${3:fn}))",
+      ""
+    ]
   }
 }
