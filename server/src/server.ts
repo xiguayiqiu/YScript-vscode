@@ -25,7 +25,6 @@ import {
   Position,
   Diagnostic as LSPDiagnostic,
   DiagnosticSeverity,
-  DiagnosticTag,
   DocumentFormattingParams,
   DocumentRangeFormattingParams,
   MarkupKind,
@@ -377,42 +376,6 @@ function validate(doc: TextDocument): LSPDiagnostic[] {
             ? DiagnosticSeverity.Warning
             : DiagnosticSeverity.Information,
       source: 'yscript',
-    });
-  }
-
-  // 2. 语义层诊断：未声明标识符
-  const { funcs, varTypes } = analyzeDocument(doc);
-  const builtinNames = new Set<string>();
-  for (const m of ALL_COMPLETIONS) builtinNames.add(m.label);
-  for (const t of TYPES) builtinNames.add(t.label);
-
-  // 收集所有 func 名与参数
-  const definedNames = new Set<string>(builtinNames);
-  for (const f of funcs.values()) {
-    definedNames.add(f.name);
-    for (const p of f.params) definedNames.add(p);
-  }
-  for (const v of varTypes.keys()) definedNames.add(v);
-
-  // 扫描标识符引用
-  const idRegex = /[A-Za-z_][A-Za-z0-9_]*/g;
-  let m: RegExpExecArray | null;
-  while ((m = idRegex.exec(text)) !== null) {
-    const name = m[0];
-    if (definedNames.has(name)) continue;
-    const offset = m.index;
-    if (isInsideStringOrComment(text, offset)) continue;
-    // 跳过 import 后的路径
-    const before = text.slice(Math.max(0, offset - 20), offset);
-    if (/import\s+["']?$/.test(before)) continue;
-    if (/^["']/.test(text[offset + name.length] ?? '')) continue;
-    const pos = offsetToPosition(text, offset);
-    out.push({
-      range: { start: pos, end: { line: pos.line, character: pos.character + name.length } },
-      message: `未定义的标识符: '${name}'`,
-      severity: DiagnosticSeverity.Warning,
-      source: 'yscript',
-      tags: [DiagnosticTag.Unnecessary],
     });
   }
 

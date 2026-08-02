@@ -1,9 +1,9 @@
 {
   "name": "yscript",
-  "displayName": "YScript",
+  "displayName": "yscript",
   "description": "YScript 语言支持：语法高亮、LSP 智能补全、悬停文档、跳转定义、代码片段（网安专用脚本语言）",
   "version": "0.2.0",
-  "publisher": "yscript",
+  "publisher": "yiqiua",
   "icon": "icon.png",
   "engines": {
     "vscode": "^1.85.0"
@@ -22,9 +22,32 @@
   ],
   "main": "./client/out/extension.js",
   "activationEvents": [
-    "onLanguage:yscript"
+    "onLanguage:yscript",
+    "onCommand:yscript.run"
   ],
   "contributes": {
+    "commands": [
+      {
+        "command": "yscript.run",
+        "title": "YScript: Run (ysc)",
+        "icon": "$(play)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "yscript.run",
+          "when": "resourceLangId == yscript",
+          "group": "navigation@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "yscript.run",
+          "when": "resourceLangId == yscript"
+        }
+      ]
+    },
     "languages": [
       {
         "id": "yscript",

@@ -165,6 +165,7 @@ exports.BUILTIN_FUNCTIONS = [
     { label: 'http.Get', kind: 'builtin', detail: 'HTTP GET请求' },
     { label: 'http.Post', kind: 'builtin', detail: 'HTTP POST请求' },
     { label: 'http.Do', kind: 'builtin', detail: 'HTTP通用请求(method,url)' },
+    { label: 'http.Insecure', kind: 'builtin', detail: '跳过/恢复TLS证书校验(默认跳过)' },
     { label: 'http.SetTimeout', kind: 'builtin', detail: '设置HTTP超时(秒)' },
     { label: 'http.SetProxy', kind: 'builtin', detail: '设置HTTP代理' },
     { label: 'net.LookupHost', kind: 'builtin', detail: 'DNS正向解析' },
