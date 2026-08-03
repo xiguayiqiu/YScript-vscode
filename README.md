@@ -41,6 +41,7 @@
 |--------|------|--------|
 | `yscript.server.path` | 自定义 LSP 可执行文件路径 | `""` |
 | `yscript.server.trace` | LSP 通信追踪级别 | `"off"` |
+| `yscript.ysc.path` | 自定义 ysc 解释器可执行文件路径（留空自动查找） | `""` |
 | `yscript.format.tabSize` | 格式化缩进大小 | `4` |
 
 ## 命令
@@ -55,11 +56,31 @@
 
 插件按以下顺序定位 `ysc` 可执行文件：
 
-1. 环境变量 `YSC_BIN`（例如 `export YSC_BIN=/usr/local/bin/ysc`）
-2. `PATH` 中的 `ysc`
+1. 设置 `yscript.ysc.path`（在设置界面或 `settings.json` 中指定解释器绝对路径）
+2. 环境变量 `YSC_BIN`（例如 `export YSC_BIN=/usr/local/bin/ysc`）
+3. `PATH` 中的 `ysc`
+
+如果以上都找不到 `ysc`，插件会弹窗提示：可直接打开 **GitHub 下载页**（https://github.com/xiguayiqiu/YScript）下载安装，或点击"选择解释器路径"手动指定 `ysc` 文件（选择后自动写入全局设置 `yscript.ysc.path`）。
 
 运行输出显示在名为 **YScript Run** 的集成终端中。
 
 ## 文件识别
 
 自动识别 `.ys` 和 `.yscript` 文件。
+
+## 文件图标（侧边栏 logo）
+
+插件自带一套 **YScript File Icons** 文件图标主题，为 `.ys` / `.yscript` 文件在资源管理器侧边栏显示 YS logo。安装插件后需要手动启用（图标主题无法由插件自动切换）：
+
+1. 打开命令面板（`Ctrl+Shift+P`），执行 `Preferences: File Icon Theme`；
+2. 选择 **YScript File Icons**。
+
+也可以在 `settings.json` 中直接指定：
+
+```json
+{
+  "workbench.iconTheme": "yscript-icons"
+}
+```
+
+未启用该主题时（例如使用默认 Seti 主题），`.ys` 文件仍会通过语言默认图标显示 YS logo。

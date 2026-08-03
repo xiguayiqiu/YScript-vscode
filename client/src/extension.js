@@ -50,24 +50,114 @@ let client;
 let runTerminal;
 let checkChannel;
 const execFileAsync = (0, util_1.promisify)(child_process_1.execFile);
+const YSCRIPT_GITHUB_URL = 'https://github.com/xiguayiqiu/YScript';
 /**
- * 定位 ysc 可执行文件：
- * 1. 环境变量 YSC_BIN（例如 /usr/local/bin/ysc）
- * 2. PATH 中的 ysc
+ * 在 PATH 中查找可执行文件（Windows 按 PATHEXT 补全扩展名）。
+ * 找到返回完整路径，否则返回 null。
  */
-function resolveYsc() {
+function findExecutableOnPath(name) {
+    const envPath = process.env.PATH ?? '';
+    const exts = process.platform === 'win32'
+        ? (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD')
+            .split(';')
+            .map((e) => e.trim())
+            .filter((e) => e.length > 0)
+        : [''];
+    for (const dir of envPath.split(path.delimiter)) {
+        if (!dir)
+            continue;
+        for (const ext of exts) {
+            const candidate = path.join(dir, name + ext);
+            try {
+                const st = fs.statSync(candidate);
+                if (!st.isFile())
+                    continue;
+                // Unix 下要求具有可执行权限
+                if (process.platform !== 'win32' && (st.mode & 0o111) === 0)
+                    continue;
+                return candidate;
+            }
+            catch {
+                // 继续查找下一个候选路径
+            }
+        }
+    }
+    return null;
+}
+/** 让用户选择解释器路径，写入全局设置 yscript.ysc.path，返回选中的路径 */
+async function pickYscPath() {
+    const picked = await vscode_1.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectFolders: false,
+        canSelectMany: false,
+        openLabel: '选择 ysc 解释器',
+        filters: {
+            可执行文件: process.platform === 'win32' ? ['exe', 'cmd', 'bat', 'ps1'] : ['*'],
+            所有文件: ['*'],
+        },
+    });
+    if (!picked || picked.length === 0)
+        return null;
+    const p = picked[0].fsPath;
+    await vscode_1.workspace.getConfiguration('yscript').update('ysc.path', p, vscode_1.ConfigurationTarget.Global);
+    return p;
+}
+/**
+ * 找不到 / 路径无效时的引导：打开 GitHub 下载页，或让用户重新指定解释器路径。
+ * 用户重新指定成功时返回新路径，否则返回 null。
+ */
+async function promptForYsc(reason) {
+    const action = await vscode_1.window.showErrorMessage(reason, '打开 GitHub 下载页', '选择解释器路径');
+    if (action === '打开 GitHub 下载页') {
+        await vscode_1.env.openExternal(vscode_1.Uri.parse(YSCRIPT_GITHUB_URL));
+        return null;
+    }
+    if (action === '选择解释器路径') {
+        const p = await pickYscPath();
+        if (p) {
+            vscode_1.window.showInformationMessage(`已设置 ysc 解释器路径: ${p}`);
+        }
+        return p;
+    }
+    return null;
+}
+/**
+ * 定位 ysc 解释器：
+ * 1. 设置 yscript.ysc.path
+ * 2. 环境变量 YSC_BIN（例如 /usr/local/bin/ysc）
+ * 3. PATH 中的 ysc
+ * 都找不到时提示 GitHub 下载链接或让用户重新指定路径。
+ */
+async function resolveYsc() {
+    // 1. 用户自定义路径
+    const configPath = (vscode_1.workspace.getConfiguration('yscript').get('ysc.path') ?? '').trim();
+    if (configPath) {
+        try {
+            if (fs.statSync(configPath).isFile())
+                return configPath;
+        }
+        catch {
+            // 路径不存在或不可访问，走提示流程
+        }
+        return promptForYsc(`yscript.ysc.path 指定的解释器不存在: ${configPath}`);
+    }
+    // 2. 环境变量 YSC_BIN
     const fromEnv = (process.env.YSC_BIN || '').trim();
     if (fromEnv) {
         const looksLikePath = path.isAbsolute(fromEnv) ||
             fromEnv.includes('/') ||
             fromEnv.includes(path.sep);
         if (looksLikePath && !fs.existsSync(fromEnv)) {
-            vscode_1.window.showErrorMessage(`YSC_BIN 指定的 ysc 不存在: ${fromEnv}`);
-            return null;
+            return promptForYsc(`YSC_BIN 指定的 ysc 不存在: ${fromEnv}`);
         }
         return fromEnv;
     }
-    return 'ysc';
+    // 3. PATH 查找
+    const found = findExecutableOnPath('ysc');
+    if (found)
+        return found;
+    // 4. 都没有 → GitHub 下载 / 重新指定
+    return promptForYsc('未找到 ysc 解释器。请安装 YScript，或手动指定解释器路径。');
 }
 /** 按当前 shell 引用路径（防止空格/特殊字符导致命令解析错误） */
 function shellQuote(value) {
@@ -167,7 +257,7 @@ function activate(context) {
             vscode_1.window.showWarningMessage('YScript: 只能运行 .ys / .yscript 脚本');
             return;
         }
-        const ysc = resolveYsc();
+        const ysc = await resolveYsc();
         if (!ysc)
             return;
         // 运行前自动保存（未命名文件会先弹出另存为）

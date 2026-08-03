@@ -2,7 +2,7 @@
   "name": "yscript",
   "displayName": "yscript",
   "description": "YScript 语言支持：语法高亮、LSP 智能补全、悬停文档、跳转定义、代码片段（网安专用脚本语言）",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "publisher": "yiqiua",
   "icon": "icon.png",
   "engines": {
@@ -54,6 +54,10 @@
         "aliases": ["YScript", "yscript"],
         "extensions": [".ys", ".yscript"],
         "filenames": [],
+        "icon": {
+          "light": "./icons/yscript-logo-light.png",
+          "dark": "./icons/yscript-logo-dark.png"
+        },
         "configuration": "./language-configuration.json"
       }
     ],
@@ -91,6 +95,11 @@
           "enum": ["off", "messages", "verbose"],
           "default": "off",
           "description": "LSP 通信追踪级别"
+        },
+        "yscript.ysc.path": {
+          "type": "string",
+          "default": "",
+          "description": "YScript 解释器 (ysc) 可执行文件路径。留空时按 YSC_BIN 环境变量 → PATH 顺序自动查找；找不到时会提示打开 GitHub 下载页或手动指定路径。"
         },
         "yscript.format.tabSize": {
           "type": "number",

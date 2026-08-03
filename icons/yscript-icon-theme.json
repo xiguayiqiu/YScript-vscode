@@ -1,13 +1,13 @@
 {
   "id": "yscript-icons",
   "label": "YScript File Icons",
-  "description": "File icons for YScript (.ys, .yscript) files - vector SVG, scales perfectly and adapts to light/dark themes",
+  "description": "File icons for YScript (.ys, .yscript) files - PNG, adapts to light/dark themes",
   "iconDefinitions": {
     "_ys_dark": {
-      "iconPath": "./yscript-logo-dark.svg"
+      "iconPath": "./yscript-logo-dark.png"
     },
     "_ys_light": {
-      "iconPath": "./yscript-logo-light.svg"
+      "iconPath": "./yscript-logo-light.png"
     }
   },
   "fileExtensions": {

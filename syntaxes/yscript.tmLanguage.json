@@ -2,23 +2,66 @@
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "name": "YScript",
   "scopeName": "source.yscript",
-  "fileTypes": ["ys", "yscript"],
+  "fileTypes": [
+    "ys",
+    "yscript"
+  ],
   "firstLineMatch": "^#!",
   "patterns": [
-    { "include": "#comment" },
-    { "include": "#preprocessor" },
-    { "include": "#bytes-literal" },
-    { "include": "#shell-command" },
-    { "include": "#strings" },
-    { "include": "#numbers" },
-    { "include": "#constants" },
-    { "include": "#test-operators" },
-    { "include": "#keywords" },
-    { "include": "#types" },
-    { "include": "#builtins" },
-    { "include": "#operators" },
-    { "include": "#punctuation" },
-    { "include": "#identifiers" }
+    {
+      "include": "#preprocessor"
+    },
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#bytes-literal"
+    },
+    {
+      "include": "#interp-string"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#regexp-literal"
+    },
+    {
+      "include": "#shell-command"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#constants"
+    },
+    {
+      "include": "#test-operators"
+    },
+    {
+      "include": "#declarations"
+    },
+    {
+      "include": "#builtins"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#punctuation"
+    },
+    {
+      "include": "#labels"
+    },
+    {
+      "include": "#identifiers"
+    }
   ],
   "repository": {
     "identifier": {
@@ -27,18 +70,24 @@
     },
     "identifiers": {
       "patterns": [
-        { "include": "#identifier" }
+        {
+          "include": "#identifier"
+        }
       ]
     },
     "preprocessor": {
       "patterns": [
         {
-          "name": "keyword.control.preprocessor.yscript",
-          "match": "^#[!]?[a-zA-Z]+\\b"
+          "name": "keyword.control.preprocessor.condition.yscript",
+          "match": "^\\s*#(if|elif|else|endif)\\b"
+        },
+        {
+          "name": "keyword.control.preprocessor.permit.yscript",
+          "match": "^\\s*#!?permit\\b"
         },
         {
           "name": "keyword.control.preprocessor.yscript",
-          "match": "^#permit\\b"
+          "match": "^\\s*#[!]?[A-Za-z][A-Za-z0-9_]*\\b"
         }
       ]
     },
@@ -48,8 +97,16 @@
           "name": "comment.block.yscript",
           "begin": "#\\*",
           "end": "\\*#",
-          "beginCaptures": { "0": { "name": "punctuation.definition.comment.begin.yscript" } },
-          "endCaptures": { "0": { "name": "punctuation.definition.comment.end.yscript" } }
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.begin.yscript"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.end.yscript"
+            }
+          }
         },
         {
           "name": "comment.line.number-sign.yscript",
@@ -57,37 +114,85 @@
         }
       ]
     },
-    "shell-command": {
-      "name": "string.interpolated.command.yscript",
-      "begin": "`",
-      "end": "`",
+    "bytes-literal": {
+      "name": "string.quoted.bytes.yscript",
+      "begin": "\\bb\"",
+      "end": "\"",
       "beginCaptures": {
-        "0": { "name": "punctuation.definition.command.begin.yscript" }
-      },
-      "endCaptures": {
-        "0": { "name": "punctuation.definition.command.end.yscript" }
+        "0": {
+          "name": "keyword.other.bytes-prefix.yscript"
+        }
       },
       "patterns": [
-        { "include": "#shell-command-content" }
+        {
+          "name": "constant.character.escape.yscript",
+          "match": "\\\\([abfnrtv\\\\\"'0]|x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|[0-7]{1,3})"
+        },
+        {
+          "name": "keyword.control.bytes-prefix.yscript",
+          "match": "\\bbase64:"
+        }
       ]
     },
-    "shell-command-content": {
+    "interp-string": {
+      "name": "string.quoted.double.interp.yscript",
+      "begin": "\\$\"",
+      "end": "\"",
+      "beginCaptures": {
+        "0": {
+          "name": "keyword.other.interp-prefix.yscript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.yscript"
+        }
+      },
       "patterns": [
         {
-          "name": "variable.shell.yscript",
-          "match": "\\$\\([^)]*\\)"
+          "name": "constant.character.escape.yscript",
+          "match": "\\\\([abfnrtv\\\\\"'\\$0]|x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})"
         },
         {
-          "name": "variable.shell.yscript",
-          "match": "\\$\\{[^}]*\\}"
-        },
-        {
-          "name": "variable.shell.yscript",
-          "match": "\\$[A-Za-z_][A-Za-z0-9_]*"
-        },
-        {
-          "name": "support.function.shell.yscript",
-          "match": "(?<![A-Za-z0-9_\\-])(nc|nmap|curl|wget|python|python3|ping|bash|sh|ssh|scp|sed|awk|grep|cat|ls|cd|echo|mkdir|rm|chmod|chown|tar|gzip|unzip|xxd|hexdump|base64|openssl|iptables|netstat|ss|ifconfig|ip|nslookup|dig|host|traceroute|whois|hydra|sqlmap|gobuster|dirb|nikto|wpscan|aircrack|john|hashcat|powershell|cmd|reg|systeminfo|hostname|ipconfig|arp|route|tracert|find|xargs|tee|sort|uniq|wc|head|tail|strings|objdump|readelf|ltrace|strace|tcpdump|msfconsole|msfvenom|searchsploit|responder|bettercap)(?![A-Za-z0-9_\\-])"
+          "name": "variable.interpolation.yscript",
+          "begin": "\\$\\{",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.interpolation.begin.yscript"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.interpolation.end.yscript"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#strings"
+            },
+            {
+              "include": "#numbers"
+            },
+            {
+              "include": "#constants"
+            },
+            {
+              "include": "#keywords"
+            },
+            {
+              "include": "#types"
+            },
+            {
+              "include": "#builtins"
+            },
+            {
+              "include": "#operators"
+            },
+            {
+              "include": "#identifiers"
+            }
+          ]
         }
       ]
     },
@@ -99,28 +204,74 @@
         {
           "name": "constant.character.escape.yscript",
           "match": "\\\\([abfnrtv\\\\\"'\\?0]|x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|[0-7]{1,3})"
-        },
-        {
-          "name": "variable.interpolation.yscript",
-          "match": "\\{[^{}]*\\}"
         }
       ]
     },
-    "bytes-literal": {
-      "name": "string.quoted.bytes.yscript",
-      "begin": "\\bb\"",
-      "end": "\"",
+    "regexp-literal": {
+      "name": "string.regexp.yscript",
+      "begin": "(?<![A-Za-z0-9_)\\]\"'}:]\\s*)/(?![/*])",
+      "end": "/([imsU]*)",
       "beginCaptures": {
-        "0": { "name": "keyword.other.bytes-prefix.yscript" }
+        "0": {
+          "name": "punctuation.definition.regexp.begin.yscript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.regexp.end.yscript"
+        },
+        "1": {
+          "name": "keyword.other.regexp-flags.yscript"
+        }
       },
       "patterns": [
         {
           "name": "constant.character.escape.yscript",
-          "match": "\\\\(x[0-9a-fA-F]{1,2}|[0-7]{1,3})"
+          "match": "\\\\."
+        }
+      ]
+    },
+    "shell-command": {
+      "name": "string.interpolated.command.yscript",
+      "begin": "`",
+      "end": "`",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.command.begin.yscript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.command.end.yscript"
+        }
+      },
+      "patterns": [
+        {
+          "name": "constant.character.escape.yscript",
+          "match": "\\\\`"
         },
         {
-          "name": "keyword.control.bytes-prefix.yscript",
-          "match": "\\bbase64:"
+          "name": "variable.interpolation.yscript",
+          "match": "\\$\\{[^}]*\\}"
+        },
+        {
+          "include": "#shell-command-content"
+        }
+      ]
+    },
+    "shell-command-content": {
+      "patterns": [
+        {
+          "name": "variable.shell.yscript",
+          "match": "\\$\\([^)]*\\)"
+        },
+        {
+          "name": "variable.shell.yscript",
+          "match": "\\$[A-Za-z_][A-Za-z0-9_]*"
+        },
+        {
+          "name": "support.function.shell.yscript",
+          "match": "(?<![A-Za-z0-9_\\-])(nc|nmap|curl|wget|python|python3|ping|bash|sh|ssh|scp|sed|awk|grep|cat|ls|cd|echo|mkdir|rm|chmod|chown|tar|gzip|unzip|xxd|hexdump|base64|openssl|iptables|netstat|ss|ifconfig|ip|nslookup|dig|host|traceroute|whois|hydra|sqlmap|gobuster|dirb|nikto|wpscan|aircrack|john|hashcat|powershell|cmd|reg|systeminfo|hostname|ipconfig|arp|route|tracert|find|xargs|tee|sort|uniq|wc|head|tail|strings|objdump|readelf|ltrace|strace|tcpdump|msfconsole|msfvenom|searchsploit|responder|bettercap)(?![A-Za-z0-9_\\-])"
         }
       ]
     },
@@ -128,7 +279,7 @@
       "patterns": [
         {
           "name": "constant.numeric.float.yscript",
-          "match": "\\b\\d+\\.\\d+(?:[eE][+-]?\\d+)?\\b"
+          "match": "\\b\\d+\\.\\d+(?:[eE][+-]?\\d+)?\\b|\\b\\d+[eE][+-]?\\d+\\b"
         },
         {
           "name": "constant.numeric.hex.yscript",
@@ -152,15 +303,19 @@
       "patterns": [
         {
           "name": "constant.language.boolean.yscript",
-          "match": "\\b(true|false)\\b"
+          "match": "\\b(?:true|false)\\b"
         },
         {
           "name": "constant.language.nil.yscript",
-          "match": "\\b(nil|nan|inf)\\b"
+          "match": "\\b(?:nil|nan|inf)\\b"
         },
         {
           "name": "constant.language.global.yscript",
-          "match": "\\b(LAST_EXIT_CODE|__FILE__|__LINE__|OS|ARCH|VERSION|ENV)\\b"
+          "match": "\\b(?:LAST_EXIT_CODE|__FILE__|__LINE__|__FUNC__|OS|ARCH|VERSION|ENV)\\b"
+        },
+        {
+          "name": "constant.language.error.yscript",
+          "match": "\\b(?:ErrOK|ErrGeneral|ErrTimeout|ErrCanceled|ErrPermission|ErrNotFound|ErrExists|ErrInvalidArg|ErrNotSupported|ErrNetGeneral|ErrNetTimeout|ErrNetRefused|ErrNetUnreach|ErrNetReset|ErrNetDNS|ErrNetTLS|ErrIOGeneral|ErrIORead|ErrIOWrite|ErrIOEOF|ErrIODiskFull|ErrIOPermission)\\b"
         }
       ]
     },
@@ -168,16 +323,111 @@
       "name": "keyword.operator.test.yscript",
       "match": "(?<![A-Za-z0-9_\\-])-(e|f|d|r|w|x|s|L|h|b|c|p|S|u|g|k|z|n|nt|ot|ef|eq|ne|gt|lt|ge|le|a|o)(?![A-Za-z0-9_\\-])|--\\w+"
     },
+    "declarations": {
+      "patterns": [
+        {
+          "name": "meta.function.yscript",
+          "match": "\\b(func)\\s+(this\\.)?([A-Za-z_][A-Za-z0-9_]*)\\s*\\(",
+          "captures": {
+            "1": {
+              "name": "keyword.declaration.yscript"
+            },
+            "2": {
+              "name": "keyword.other.unit.yscript"
+            },
+            "3": {
+              "name": "entity.name.function.yscript"
+            }
+          }
+        },
+        {
+          "name": "meta.type.yscript",
+          "match": "\\b(struct|interface|enum|class)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.declaration.yscript"
+            },
+            "2": {
+              "name": "entity.name.type.yscript"
+            }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.flow.yscript",
+          "match": "\\b(?:if|else|elif|switch|case|default|match|for|while|loop|in|range|break|continue|goto|return|yield|defer)\\b"
+        },
+        {
+          "name": "keyword.control.import.yscript",
+          "match": "\\b(?:import|package|as|using|namespace)\\b"
+        },
+        {
+          "name": "keyword.declaration.yscript",
+          "match": "\\b(?:let|const|var|func|init|main|struct|enum|interface|class|map|warp|do)\\b"
+        },
+        {
+          "name": "keyword.operator.logical.yscript",
+          "match": "\\b(?:and|or|not|xor)\\b"
+        },
+        {
+          "name": "keyword.operator.comparison.yscript",
+          "match": "\\b(?:matches|is)\\b"
+        },
+        {
+          "name": "keyword.control.exception.yscript",
+          "match": "\\b(?:try|catch|finally|raise|panic|recover|assert)\\b"
+        },
+        {
+          "name": "keyword.other.unit.yscript",
+          "match": "\\b(?:this|self)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.yscript",
+          "match": "\\b(?:byte|char|short|ushort|int|uint|long|ulong|float|double|bool|string|bytes|list|dict|ipv4|ipv6|error|any|void)\\b"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.yscript",
+          "match": "\\b(?:print|println|printf|sprintf|len|type|hex|eval|next|panic|recover|assert)\\b"
+        },
+        {
+          "name": "constant.other.builtin.yscript",
+          "match": "\\b(?:time\\.DAY|time\\.HOUR|time\\.MINUTE|time\\.SECOND|time\\.MILLISECOND|time\\.RFC3339|binary\\.EOF|io\\.EOF|io\\.Stdin|io\\.Stdout|io\\.Stderr)\\b"
+        },
+        {
+          "name": "support.function.builtin.yscript",
+          "match": "\\b(?:ssl\\.GetServerCertificate|crypto\\.ChaCha20_Encrypt|crypto\\.ChaCha20_Decrypt|crypto\\.Base64URLDecode|encoding\\.base64_encode|cuda\\.HMAC_SHA512_Batch|crypto\\.Base64URLEncode|ssl\\.GetCertificateInfo|cuda\\.HMAC_SHA256_Batch|crypto\\.WPA2_MIC_Verify|encoding\\.base64_decode|crypto\\.AES_GCM_Encrypt|crypto\\.AES_GCM_Decrypt|reflect\\.is_collection|crypto\\.Ed25519_Keygen|ssl\\.ParseCertificates|ssl\\.VerifyCertificate|crypto\\.Ed25519_Verify|ssl\\.ParseTLSHandshake|io\\.ErrSeekUnsupported|cuda\\.HMAC_SHA1_Batch|ssl\\.ParseCertificate|ssl\\.ParseCipherSuite|encoding\\.html_decode|errors\\.new_with_code|encoding\\.html_encode|binary\\.Base64Encode|os\\.shell_background|crypto\\.Ed25519_Sign|encoding\\.url_encode|crypto\\.WPA2_Decrypt|crypto\\.BcryptVerify|crypto\\.Base58Decode|crypto\\.ECDSA_Verify|sys\\.default_gateway|encoding\\.hex_decode|crypto\\.WPA2_Encrypt|encoding\\.hex_encode|crypto\\.Base58Encode|ssl\\.ParseTLSVersion|crypto\\.ECDSA_Keygen|binary\\.LittleEndian|rsa\\.GenerateKeyPair|binary\\.BytesWritten|encoding\\.url_decode|sys\\.service_restart|binary\\.Base64Decode|cuda\\.WPA2_PMK_Batch|reflect\\.call_method|ssl\\.ParseTLSRecord|crypto\\.HMAC_SHA256|array\\.BinarySearch|sys\\.net_interfaces|binary\\.BufferWrite|crypto\\.HMAC_SHA512|cuda\\.device_memory|strings\\.Capitalize|cuda\\.SHA256d_Batch|binary\\.BufferBytes|sys\\.service_status|binary\\.BufferReset|stdio\\.hide_cursor|net\\.CIDR_contains|json\\.pretty_print|strings\\.IsControl|strings\\.TrimRight|strings\\.HasSuffix|crypto\\.BcryptHash|cuda\\.PBKDF2_Batch|stdio\\.move_cursor|reflect\\.is_number|cuda\\.SHA512_Batch|raw\\.BuildEthernet|io\\.read_with_size|stdio\\.show_cursor|strings\\.RuneCount|strings\\.HasPrefix|reflect\\.from_json|cuda\\.device_count|strings\\.LastIndex|crypto\\.ECDSA_Sign|time\\.days_between|sys\\.is_executable|stdio\\.err_println|strings\\.EqualFold|raw\\.PcapWriteFile|cuda\\.SHA256_Batch|binary\\.BufferRead|strings\\.TrimSpace|raw\\.ParseEthernet|reflect\\.deep_copy|strings\\.FromRunes|sys\\.service_start|binary\\.PutFloat64|binary\\.PutFloat32|sys\\.process_list|crypto\\.HMAC_SHA3|strings\\.TrimLeft|sys\\.current_user|io\\.NewReadWriter|binary\\.BigEndian|binary\\.HexEncode|strings\\.ReplaceN|binary\\.NewReader|sys\\.kill_process|binary\\.WriteFile|raw\\.PcapReadFile|stdio\\.err_printf|binary\\.PutUint32|binary\\.BufferCap|stdio\\.clear_line|binary\\.PutUint64|binary\\.FileWrite|stdio\\.read_float|binary\\.BufferLen|binary\\.WriteByte|binary\\.NewWriter|sys\\.service_stop|strings\\.IsLetter|binary\\.PutUint16|array\\.Difference|regex\\.replace_fn|sys\\.process_info|os\\.signal_notify|cuda\\.device_name|time\\.millisecond|binary\\.HexDecode|errors\\.with_type|strings\\.Contains|cuda\\.Device_Info|binary\\.FileClose|sys\\.find_process|binary\\.NewBuffer|crypto\\.WPA2_PTK|strings\\.IsSpace|stdio\\.err_print|io\\.http_request|strings\\.ToUpper|binary\\.Contains|binary\\.PadRight|sys\\.primary_mac|cuda\\.Set_Device|crypto\\.SHAKE256|raw\\.MACToString|crypto\\.SHA3_256|sys\\.is_writable|net\\.InterfaceBy|color\\.Underline|strings\\.Compare|stdio\\.has_input|crypto\\.HashFile|binary\\.PutInt16|strings\\.Replace|crypto\\.SHA3_384|crypto\\.WPA2_PMK|sys\\.user_groups|sync\\.WorkerPool|binary\\.FileRead|strings\\.IsDigit|net\\.DialTimeout|binary\\.FileSeek|reflect\\.convert|stdio\\.read_line|reflect\\.type_of|compress\\.gunzip|binary\\.ReadFile|strings\\.ToRunes|crypto\\.SHAKE128|binary\\.FromUTF8|cuda\\.NTLM_Batch|reflect\\.to_json|stdio\\.read_bool|strings\\.IsBlank|binary\\.PutInt64|binary\\.ReadByte|strings\\.ToLower|http\\.SetTimeout|binary\\.PutInt32|array\\.Intersect|sys\\.is_readable|time\\.new_ticker|crypto\\.SHA3_512|time\\.after_chan|raw\\.StringToMAC|binary\\.Compare|stdio\\.read_all|io\\.file_exists|raw\\.OpenSocket|path\\.normalize|cuda\\.available|yaml\\.from_file|toml\\.from_file|binary\\.Float32|io\\.MultiReader|reflect\\.fields|time\\.timestamp|strings\\.Repeat|json\\.stringify|binary\\.Replace|binary\\.Float64|io\\.LimitReader|io\\.write_bytes|thread\\.sigstop|sync\\.Semaphore|net\\.CIDR_merge|path\\.to_native|raw\\.PcapFilter|io\\.WriteString|net\\.LookupPort|binary\\.PadLeft|sync\\.WaitGroup|json\\.from_file|color\\.Color256|net\\.Interfaces|time\\.diff_days|time\\.from_unix|net\\.ResolveTCP|time\\.tz_offset|strings\\.SplitN|net\\.LookupAddr|binary\\.ReadAll|io\\.append_file|time\\.new_timer|array\\.Contains|stdio\\.read_int|net\\.LookupHost|net\\.ResolveUDP|cuda\\.MD5_Batch|regex\\.find_all|stdio\\.password|cuda\\.MD4_Batch|sys\\.is_windows|regex\\.compile|io\\.write_file|raw\\.PcapClose|io\\.is_symlink|stdio\\.confirm|errors\\.format|binary\\.Repeat|ssl\\.EncodePEM|rand\\.filename|stdio\\.getchar|path\\.basename|thread\\.parent|stdio\\.colorln|os\\.exec_shell|regex\\.replace|ini\\.from_file|color\\.Println|crypto\\.SHA512|ssl\\.DecodePEM|net\\.ConnClose|http\\.SetProxy|strings\\.Index|crypto\\.PBKDF2|net\\.LookupTXT|color\\.Magenta|http\\.Insecure|strings\\.Split|binary\\.Uint32|net\\.LookupSRV|io\\.read_lines|io\\.file_mtime|log\\.set_level|aes\\.RandomKey|binary\\.Concat|binary\\.Create|binary\\.Uint16|color\\.Sprintf|io\\.remove_all|array\\.Reshape|raw\\.ParseIPv4|raw\\.BuildIPv4|crypto\\.SHA256|sys\\.disk_info|net\\.ConnWrite|binary\\.Uint64|stdio\\.println|strings\\.Count|io\\.read_bytes|color\\.Reverse|compress\\.gzip|time\\.duration|strings\\.Runes|xml\\.ParseFile|net\\.IPVersion|net\\.ConnRead|binary\\.Write|array\\.Unique|raw\\.PcapNext|sync\\.RWMutex|from\\.Appendf|binary\\.Int16|io\\.temp_file|io\\.http_post|sys\\.mem_info|binary\\.Slice|raw\\.BuildUDP|sync\\.default|binary\\.Int32|io\\.read_with|reflect\\.call|array\\.Reduce|io\\.NewReader|sys\\.cpu_info|color\\.Yellow|raw\\.BuildDNS|stdio\\.select|errors\\.cause|io\\.read_file|path\\.dirname|net\\.LookupNS|binary\\.Index|color\\.Italic|stdio\\.prompt|path\\.to_unix|stdio\\.printf|binary\\.Int64|rand\\.shuffle|binary\\.Bytes|io\\.mkdir_all|raw\\.PcapOpen|raw\\.ParseTCP|from\\.Fprintf|from\\.Sprintf|io\\.file_size|binary\\.Chunk|io\\.NewWriter|raw\\.ParseDNS|raw\\.BuildTCP|raw\\.ParseUDP|from\\.Println|io\\.file_mode|array\\.Filter|net\\.LookupMX|strings\\.Trim|color\\.Sprint|strings\\.Join|io\\.ErrClosed|from\\.Formats|json\\.to_file|sys\\.is_linux|io\\.file_info|color\\.Print|rand\\.choice|io\\.hardlink|path\\.expand|time\\.format|color\\.Blink|ssl\\.Connect|binary\\.Grow|stdio\\.print|from\\.Scanln|sys\\.os_info|time\\.now_ns|from\\.Fscanf|time\\.now_ms|path\\.is_rel|reflect\\.set|os\\.hostname|binary\\.Skip|net\\.DialUDP|binary\\.Read|color\\.White|stdio\\.flush|errors\\.wrap|sync\\.Atomic|rsa\\.Encrypt|thread\\.self|io\\.read_dir|binary\\.Trim|net\\.DialTCP|path\\.volume|path\\.is_abs|stdio\\.color|sync\\.select|regex\\.match|reflect\\.has|io\\.realpath|from\\.Errorf|time\\.second|array\\.Range|reflect\\.get|regex\\.named|sys\\.is_root|stdio\\.putln|rand\\.string|iter\\.filter|raw\\.Receive|regex\\.split|io\\.readlink|array\\.Chunk|aes\\.Decrypt|stdio\\.clear|crypto\\.SHA1|io\\.temp_dir|log\\.to_json|color\\.Green|array\\.New2D|time\\.now_us|aes\\.Encrypt|io\\.ReadByte|os\\.temp_dir|color\\.Reset|array\\.Union|rsa\\.Decrypt|binary\\.UTF8|binary\\.Open|from\\.Sscanf|io\\.http_get|stdio\\.input|array\\.Sort|color\\.Cyan|sync\\.Mutex|rand\\.float|stdio\\.bell|stdio\\.read|array\\.Rows|iter\\.chain|json\\.parse|color\\.Blue|regex\\.find|os\\.environ|rsa\\.Verify|time\\.month|errors\\.new|io\\.symlink|color\\.RGBA|toml\\.parse|time\\.parse|time\\.local|url\\.Encode|iter\\.lines|url\\.Decode|io\\.ReadAll|array\\.Cols|stdio\\.puts|net\\.Accept|time\\.in_tz|time\\.after|iter\\.bytes|time\\.ready|from\\.Scanf|json\\.query|color\\.Bold|array\\.Fill|from\\.Print|path\\.split|io\\.is_file|stdio\\.putf|iter\\.items|os\\.running|yaml\\.parse|array\\.Copy|net\\.Listen|crypto\\.MD5|path\\.clean|rand\\.bytes|ffi\\.alloc|io\\.stdout|io\\.unlock|time\\.stop|ini\\.parse|os\\.getpid|raw\\.Close|log\\.error|stdio\\.eof|sync\\.Chan|io\\.String|rand\\.intn|url\\.Parse|array\\.Len|csv\\.Write|ffi\\.write|xml\\.Parse|os\\.setenv|array\\.Get|sync\\.case|errors\\.is|color\\.RGB|rand\\.uuid|time\\.year|os\\.getenv|time\\.wait|io\\.stderr|stdio\\.put|from\\.Scan|array\\.Dim|io\\.remove|io\\.is_dir|path\\.join|cuda\\.Sync|sync\\.Cond|array\\.Set|path\\.stem|csv\\.Parse|io\\.create|array\\.Map|http\\.Post|log\\.debug|iter\\.take|array\\.Zip|io\\.rename|array\\.New|color\\.Red|ffi\\.read|csv\\.Read|path\\.abs|io\\.Bytes|io\\.which|io\\.chown|io\\.stdin|rsa\\.Sign|io\\.close|time\\.sub|io\\.Write|log\\.info|os\\.shell|ffi\\.open|io\\.mkdir|ffi\\.bind|rand\\.int|ffi\\.call|time\\.add|iter\\.map|raw\\.Send|color\\.Bg|path\\.rel|time\\.day|net\\.CIDR|ffi\\.free|path\\.ext|io\\.Close|ffi\\.find|net\\.IsIP|sync\\.TLS|log\\.warn|time\\.utc|time\\.now|os\\.sleep|io\\.chmod|http\\.Get|http\\.Do|io\\.Read|io\\.walk|io\\.glob|os\\.kill|io\\.open|io\\.lock|os\\.exit|os\\.exec|io\\.Skip|io\\.Copy|io\\.copy|ffi\\.str|os\\.wait|io\\.read)\\b"
+        },
+        {
+          "name": "support.function.method.yscript",
+          "match": "(?<=\\.)(?:compare_and_swap|wait_timeout|is_multicast|split_lines|trim_suffix|replace_all|try_acquire|is_loopback|trim_prefix|is_private|last_index|capitalize|has_prefix|has_suffix|pad_right|is_global|broadcast|to_base64|truncate|pad_left|contains|find_all|is_empty|expanded|prepend|version|recover|sprintf|matches|reverse|release|acquire|sort_by|println|to_utf8|replace|runlock|reduce|append|printf|values|detach|assert|unique|signal|delete|remove|double|string|to_hex|submit|unlink|filter|repeat|unlock|living|insert|chunk|store|lower|items|await|bytes|panic|merge|hosts|count|split|ulong|rlock|first|clear|index|upper|empty|close|print|float|size|last|lock|uint|join|ipv6|hush|long|load|link|next|stop|keys|eval|done|bool|type|trim|snap|wait|swap|ipv4|flat|send|recv|find|sort|copy|add|set|cap|int|len|map|sub|has|pop|hex|del|get)\\b"
+        }
+      ]
+    },
     "operators": {
       "patterns": [
-  {
-   "name": "keyword.operator.logical.yscript",
-   "match": "(\\|>|=>|\\?\\.|\\?\\?)"
-  },
-  {
-   "name": "keyword.operator.ternary.yscript",
-   "match": "\\?(?![.?])"
-  },
+        {
+          "name": "keyword.operator.logical.yscript",
+          "match": "(\\|>|=>|\\?\\.|\\?\\?)"
+        },
+        {
+          "name": "keyword.operator.yscript",
+          "match": "(?:\\.\\.\\.?|->|<-|@>|@|::)"
+        },
+        {
+          "name": "keyword.operator.ternary.yscript",
+          "match": "\\?(?![.?])"
+        },
         {
           "name": "keyword.operator.assignment.yscript",
           "match": "(<<=|>>=|\\+=|-=|\\*=|/=|%=|&=|\\|=|\\^=|=)"
@@ -197,10 +447,6 @@
         {
           "name": "keyword.operator.comparison.yscript",
           "match": "(?<!==)(?<!!=)(?<!<=)(?<!>=)(?<!=)(<|>)(?!=)"
-        },
-        {
-          "name": "keyword.operator.yscript",
-          "match": "(?:\\.\\.\\.?|->|@>|@|::)"
         }
       ]
     },
@@ -212,51 +458,18 @@
         }
       ]
     },
-    "keywords": {
+    "labels": {
       "patterns": [
         {
-          "name": "keyword.control.flow.yscript",
-          "match": "\\b(if|else|elif|switch|case|default|match|for|while|loop|in|range|break|continue|goto|return|yield|defer)\\b"
-        },
-        {
-          "name": "keyword.control.import.yscript",
-          "match": "\\b(import|package|as)\\b"
-        },
-        {
-          "name": "keyword.declaration.yscript",
-          "match": "\\b(let|const|func|init|main|struct|enum|interface|warp)\\b"
-        },
-        {
-          "name": "keyword.operator.logical.yscript",
-          "match": "\\b(and|or|not|xor)\\b"
-        },
-        {
-          "name": "keyword.operator.comparison.yscript",
-          "match": "\\b(matches|is)\\b"
-        },
-        {
-          "name": "keyword.control.exception.yscript",
-          "match": "\\b(panic|recover|assert)\\b"
-        },
-        {
-          "name": "keyword.other.unit.yscript",
-          "match": "\\b(this|self)\\b"
-        }
-      ]
-    },
-    "builtins": {
-      "patterns": [
-        {
-          "name": "support.function.builtin.yscript",
-          "match": "\\b(print|println|printf|sprintf|len|type|string|int|float|bool|bytes|hex|byte|char|eval|next|ipv4|ipv6)\\b"
-        }
-      ]
-    },
-    "types": {
-      "patterns": [
-        {
-          "name": "storage.type.yscript",
-          "match": "\\b(byte|char|short|ushort|int|uint|long|ulong|float|double|bool|string|bytes|list|dict|ipv4|ipv6|error|nil|void|any)\\b"
+          "match": "^(\\s*)([A-Za-z_][A-Za-z0-9_]*)(:)(\\s*)$",
+          "captures": {
+            "2": {
+              "name": "entity.name.label.yscript"
+            },
+            "3": {
+              "name": "punctuation.definition.label.yscript"
+            }
+          }
         }
       ]
     }
