@@ -281,6 +281,35 @@ function activate(context) {
         terminal.show(true);
         terminal.sendText(`${shellQuote(ysc)} ${shellQuote(filePath)}`, true);
     }));
+    // 格式化当前文档（右键菜单 / 命令面板）。
+    // 直接复用服务端 lexer 的 formatSource，不依赖 LSP 协商，保证右键点击必定生效。
+    context.subscriptions.push(vscode_1.commands.registerCommand('yscript.format', async () => {
+        const editor = vscode_1.window.activeTextEditor;
+        if (!editor)
+            return;
+        if (editor.document.languageId !== 'yscript')
+            return;
+        try {
+            // 服务端 lexer.js 无外部依赖（纯 JS），客户端可直接 require
+            const lexer = require(path.join(context.extensionPath, 'server', 'out', 'lexer.js'));
+            const text = editor.document.getText();
+            const tabSize = typeof editor.options.tabSize === 'number'
+                ? editor.options.tabSize
+                : 4;
+            const newText = lexer.formatSource(text, tabSize);
+            if (newText === text) {
+                vscode_1.window.setStatusBarMessage('YScript: 已是最佳格式', 3000);
+                return;
+            }
+            const edit = new vscode_1.WorkspaceEdit();
+            edit.replace(editor.document.uri, new vscode_1.Range(editor.document.positionAt(0), editor.document.positionAt(text.length)), newText);
+            const applied = await vscode_1.workspace.applyEdit(edit);
+            vscode_1.window.setStatusBarMessage(applied ? 'YScript: 格式化完成' : 'YScript: 格式化失败', 3000);
+        }
+        catch (err) {
+            vscode_1.window.showErrorMessage(`YScript: 格式化出错: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }));
 }
 function deactivate() {
     if (!client)

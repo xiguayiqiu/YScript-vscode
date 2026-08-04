@@ -308,13 +308,27 @@
   "http get": {
     "prefix": "hget",
     "body": [
-      "let ${1:resp} = net.HTTPGet(\"${2:url}\")",
-      "if ${1:resp}.ok {",
-      "\tprintln(${1:resp}.body)",
+      "let ${1:resp} = http.Get(\"${2:url}\")",
+      "if ${1:resp}.status == 200 {",
+      "\tprintln(${1:resp}.status)",
+      "\tprintln(${1:resp}.headers())",
+      "\tprintln(${1:resp}.body())",
       "}",
       ""
     ],
     "description": "HTTP GET 请求"
+  },
+  "http raw": {
+    "prefix": "hraw",
+    "body": [
+      "let ${1:resp} = http.Get(\"${2:url}\")",
+      "println(${1:resp}.status)",
+      "println(http.Headers(${1:resp}, \"content-type\"))",
+      "println(${1:resp}.body())",
+      "println(${1:resp}.raw())",
+      ""
+    ],
+    "description": "HTTP 响应头/体/完整原始响应(类似Burp)"
   },
   "port scan": {
     "prefix": "pscan",

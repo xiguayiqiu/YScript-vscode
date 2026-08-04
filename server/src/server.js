@@ -659,42 +659,9 @@ connection.onDocumentRangeFormatting((params) => {
         return [];
     return formatYScript(doc.getText(), params.options.tabSize ?? 4);
 });
-/** 简化版 YScript 格式化：基于大括号配对的智能缩进 */
+/** YScript 格式化：核心逻辑在 lexer.ts 的 formatSource（词法 token 感知） */
 function formatYScript(text, tabSize) {
-    const indent = ' '.repeat(Math.max(0, Math.min(tabSize, 8)));
-    const lines = text.split('\n');
-    const out = [];
-    let depth = 0;
-    for (const raw of lines) {
-        let line = raw.replace(/[\t]/g, indent).replace(/\s+$/, '');
-        const trimmed = line.trim();
-        // 空行
-        if (trimmed.length === 0) {
-            out.push('');
-            continue;
-        }
-        // 注释
-        if (trimmed.startsWith('#') || trimmed.startsWith('#*')) {
-            out.push(indent.repeat(depth) + trimmed);
-            continue;
-        }
-        // 闭合括号开头的行 → 减少缩进
-        const leadingClose = trimmed.match(/^[}\)\]]+/);
-        let localDepth = depth;
-        if (leadingClose) {
-            localDepth = Math.max(0, depth - leadingClose[0].length);
-            // 同行的开括号也抵消回来
-            const opensInLine = (trimmed.match(/[\{\(\[]/g) || []).length;
-            const closesInLine = (trimmed.match(/[\}\)\]]/g) || []).length;
-            localDepth = Math.max(0, depth - closesInLine + opensInLine);
-        }
-        out.push(indent.repeat(localDepth) + trimmed);
-        // 统计开/闭括号，更新全局 depth
-        const opens = (trimmed.match(/[\{\(\[]/g) || []).length;
-        const closes = (trimmed.match(/[\}\)\]]/g) || []).length;
-        depth = Math.max(0, depth + opens - closes);
-    }
-    const newText = out.join('\n');
+    const newText = (0, lexer_1.formatSource)(text, tabSize);
     if (newText === text)
         return [];
     return [

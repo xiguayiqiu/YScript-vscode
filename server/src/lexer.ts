@@ -35,9 +35,10 @@ const KEYWORDS = new Set([
   'if', 'else', 'elif', 'switch', 'case', 'default',
   'for', 'in', 'range', 'while', 'loop', 'break', 'continue',
   'return', 'yield', 'goto', 'assert',
-  'defer', 'match', 'warp', 'import', 'package', 'as',
+  'defer', 'match', 'warp', 'import', 'package', 'as', 'do',
   'and', 'or', 'not', 'xor', 'matches', 'is',
   'this', 'main', 'init', 'panic', 'recover',
+  'try', 'catch', 'finally',
 ]);
 
 const TYPES = new Set([
@@ -263,7 +264,18 @@ export function analyze(tokens: Token[], source: string): Diagnostic[] {
   while (i < source.length) {
     const ch = source[i];
     if (ch === '\n') { i++; continue; }
-    // 跳过字符串和注释
+    // 跳过字符串和注释（yscript 注释：# 行注释、#* ... *# 块注释）
+    if (ch === '#' && source[i + 1] !== '*') {
+      while (i < source.length && source[i] !== '\n') i++;
+      continue;
+    }
+    if (ch === '#' && source[i + 1] === '*') {
+      i += 2;
+      while (i < source.length && !(source[i] === '*' && source[i + 1] === '#')) i++;
+      i += 2;
+      continue;
+    }
+    // 兼容历史遗留的 C 风格注释
     if (ch === '/' && source[i + 1] === '/') {
       while (i < source.length && source[i] !== '\n') i++;
       continue;
@@ -349,3 +361,169 @@ function computeLineMap(source: string): LineMap {
 }
 
 export const _internal = { computeLineMap };
+
+/**
+ * 格式化 YScript 源码：基于词法 token 的智能缩进。
+ * - 注释、字符串、反引号 shell、bytes 字面量内的括号不会影响缩进
+ * - 多行块注释续行按当前深度重排，多行字符串/反引号续行保持原样
+ * - else/elif/catch/finally 单独成行时与 if/try 对齐
+ * - 逗号后补空格、赋值号两侧补空格
+ * 返回格式化后的完整文本；无需改动时内容不变。
+ */
+export function formatSource(text: string, tabSize: number): string {
+  const indent = ' '.repeat(Math.max(1, Math.min(tabSize || 4, 8)));
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const lines = text.split(/\r?\n/);
+
+  const lineStarts: number[] = [0];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '\n') lineStarts.push(i + 1);
+  }
+  const lineIndexOf = (offset: number): number => {
+    let lo = 0, hi = lineStarts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (lineStarts[mid] <= offset) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  };
+
+  const tokens = tokenize(text);
+
+  // 每行的标点/运算符/关键字 token（注释与字符串内容已被词法器排除）
+  const lineTokens: Token[][] = Array.from({ length: lines.length }, () => []);
+  for (const t of tokens) {
+    if (t.type === 'punctuation' || t.type === 'operator' || t.type === 'keyword') {
+      lineTokens[lineIndexOf(t.start)].push(t);
+    }
+  }
+
+  // 跨行 token 的续行标记
+  const inCommentCont = new Array<boolean>(lines.length).fill(false);
+  const inTextCont = new Array<boolean>(lines.length).fill(false);
+  for (const t of tokens) {
+    if (t.type !== 'comment' && t.type !== 'string' && t.type !== 'shell' && t.type !== 'bytes') continue;
+    const newlines = (t.value.match(/\n/g) || []).length;
+    if (newlines === 0) continue;
+    const startLine = t.line - 1;
+    const isBlockComment = t.type === 'comment' && t.value.startsWith('#*');
+    for (let k = startLine + 1; k <= startLine + newlines && k < lines.length; k++) {
+      if (isBlockComment) inCommentCont[k] = true;
+      else inTextCont[k] = true;
+    }
+  }
+
+  const out: string[] = [];
+  let depth = 0;
+
+  for (let li = 0; li < lines.length; li++) {
+    const raw = lines[li];
+
+    // 多行字符串/反引号续行：保持原样，避免改变字符串内容
+    if (inTextCont[li]) {
+      out.push(raw.replace(/\s+$/, ''));
+      continue;
+    }
+    // 多行块注释续行：按当前深度重排缩进（注释内容无运行语义，安全）
+    if (inCommentCont[li]) {
+      const t = raw.replace(/\t/g, indent).trim();
+      out.push(t.length > 0 ? indent.repeat(depth) + t : '');
+      continue;
+    }
+
+    if (raw.trim().length === 0) {
+      out.push('');
+      continue;
+    }
+
+    // 行内空格规整（基于 token 偏移，不会动注释/字符串）
+    let line = addSpacing(raw, lineStarts[li], lineTokens[li]);
+    line = line.replace(/\t/g, indent).replace(/\s+$/, '');
+    const trimmed = line.trim();
+
+    // 行首闭合括号 → 减少缩进
+    const leadingCloses = (trimmed.match(/^[}\])]+/) || [''])[0].length;
+    let lineDepth = Math.max(0, depth - leadingCloses);
+
+    // else/elif/catch/finally 单独成行时与 if/try 对齐
+    if (!trimmed.startsWith('}') && /^(else|elif|catch|finally)\b/.test(trimmed)) {
+      lineDepth = Math.max(0, lineDepth - 1);
+    }
+
+    out.push(indent.repeat(lineDepth) + trimmed);
+
+    // 更新缩进深度（只统计真实代码中的括号）
+    let opens = 0;
+    let closes = 0;
+    for (const t of lineTokens[li]) {
+      if (t.value === '{' || t.value === '(' || t.value === '[') opens++;
+      else if (t.value === '}' || t.value === ')' || t.value === ']') closes++;
+    }
+    depth = Math.max(0, depth + opens - closes);
+  }
+
+  return out.join(eol);
+}
+
+const BLOCK_KEYWORDS = new Set([
+  'if', 'for', 'while', 'switch', 'catch', 'try', 'else', 'elif', 'finally',
+  'do', 'match', 'warp', 'struct', 'interface', 'class', 'enum', 'loop',
+  'using', 'namespace',
+]);
+
+/**
+ * 在行内按 token 边界补充空格：
+ * 逗号后一空格、赋值号两侧各一空格、else/elif/catch/finally 两侧空格、
+ * 块开括号 { 前补空格（仅在 `)`/`]` 之后或关键字之后，避免改动 Point{...} 结构体字面量）。
+ */
+function addSpacing(line: string, lineStart: number, toks: Token[]): string {
+  const edits: { pos: number; text: string }[] = [];
+  for (const t of toks) {
+    const ls = t.start - lineStart;
+    const le = t.end - lineStart;
+    if (t.value === ',') {
+      const next = line[le];
+      if (le < line.length && next !== ' ' && next !== ')' && next !== ']' && next !== '}') {
+        edits.push({ pos: le, text: ' ' });
+      }
+    } else if (t.value === '=') {
+      if (ls > 0 && line[ls - 1] !== ' ') edits.push({ pos: ls, text: ' ' });
+      const next = line[le];
+      if (le < line.length && next !== ' ') edits.push({ pos: le, text: ' ' });
+    } else if (t.value === '{') {
+      const prevChar = ls > 0 ? line[ls - 1] : '';
+      const prevTok = lastTokenEndingAt(toks, lineStart, ls);
+      if (
+        prevChar !== ' ' && prevChar !== '\t' &&
+        (prevChar === ')' || prevChar === ']' || (prevTok !== null && BLOCK_KEYWORDS.has(prevTok.value)))
+      ) {
+        edits.push({ pos: ls, text: ' ' });
+      }
+    } else if (t.value === 'else' || t.value === 'elif' || t.value === 'catch' || t.value === 'finally') {
+      if (ls > 0 && line[ls - 1] !== ' ') edits.push({ pos: ls, text: ' ' });
+      const next = line[le];
+      if (le < line.length && next !== ' ') edits.push({ pos: le, text: ' ' });
+    }
+  }
+  if (edits.length === 0) return line;
+  edits.sort((a, b) => b.pos - a.pos);
+  let lastPos = -1;
+  for (const e of edits) {
+    if (e.pos === lastPos) continue; // 同一位置只插入一次，避免 `} else  {` 双空格
+    lastPos = e.pos;
+    line = line.slice(0, e.pos) + e.text + line.slice(e.pos);
+  }
+  return line;
+}
+
+/** 返回该行中结束位置 <= pos 的最后一个 token（用于判断 { 前是关键字还是类型名） */
+function lastTokenEndingAt(toks: Token[], lineStart: number, pos: number): Token | null {
+  let found: Token | null = null;
+  for (const t of toks) {
+    const le = t.end - lineStart;
+    if (le <= pos) found = t;
+    else break;
+  }
+  return found;
+}

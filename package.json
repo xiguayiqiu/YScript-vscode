@@ -2,7 +2,7 @@
   "name": "yscript",
   "displayName": "yscript",
   "description": "YScript 语言支持：语法高亮、LSP 智能补全、悬停文档、跳转定义、代码片段（网安专用脚本语言）",
-  "version": "0.2.2",
+  "version": "0.2.5",
   "publisher": "yiqiua",
   "icon": "icon.png",
   "engines": {
@@ -31,9 +31,21 @@
         "command": "yscript.run",
         "title": "YScript: Run (ysc)",
         "icon": "$(play)"
+      },
+      {
+        "command": "yscript.format",
+        "title": "YScript: 格式化文档 (Format Document)",
+        "icon": "$(format)"
       }
     ],
     "menus": {
+      "editor/context": [
+        {
+          "command": "yscript.format",
+          "when": "resourceLangId == yscript && editorTextFocus",
+          "group": "1_modification@1"
+        }
+      ],
       "editor/title": [
         {
           "command": "yscript.run",
