@@ -387,16 +387,6 @@
       "${1:cond} ? ${2:a} : ${3:b}"
     ]
   },
-  "method": {
-    "prefix": "stm",
-    "description": "struct 方法 (this)",
-    "body": [
-      "func this.${1:name}(${2:args}) {",
-      "\t${0}",
-      "}",
-      ""
-    ]
-  },
   "multiret": {
     "prefix": "mret",
     "description": "多返回值",
@@ -415,5 +405,112 @@
       "let ${1:r} = sync.select(sync.case(${2:ch}, ${3:fn}))",
       ""
     ]
+  },
+  "struct with inheritance": {
+    "prefix": "structext",
+    "body": [
+      "struct ${1:Child} extends ${2:Parent} {",
+      "\t${3:field}: ${4:type}",
+      "}",
+      "",
+      "# 重写父类方法；super.method() 复用父类实现",
+      "func this.${5:method}() -> ${6:string} {",
+      "\treturn super.${5:method}() + \"${0}\"",
+      "}"
+    ],
+    "description": "继承 struct + 重写方法（super 调用）"
+  },
+  "slice expression": {
+    "prefix": "slice",
+    "body": "${1:list}[${2:start}:${3:end}${4::${5:step}}]",
+    "description": "切片表达式 [start:end:step]（负下标/负步长可用）"
+  },
+  "socket tcp server": {
+    "prefix": "stcp",
+    "body": [
+      "let srv = socket.Socket(\"tcp\")",
+      "let port = srv.listen(${1:8080})",
+      "let cli = srv.accept()",
+      "cli.send(\"${2:hello}\\n\")",
+      "println(binary.UTF8(cli.recv_line()))",
+      "cli.close()",
+      "srv.close()"
+    ],
+    "description": "socket TCP 服务端（listen/accept/send/recv_line）"
+  },
+  "socket tcp client": {
+    "prefix": "stcpc",
+    "body": [
+      "let s = socket.Socket(\"tcp\")",
+      "s.connect(\"${1:127.0.0.1}\", ${2:8080})",
+      "s.send(\"${3:GET / HTTP/1.1\\r\\n\\r\\n}\")",
+      "println(binary.UTF8(s.recv_all()))",
+      "s.close()"
+    ],
+    "description": "socket TCP 客户端（connect/send/recv_all）"
+  },
+  "socket tcp request": {
+    "prefix": "stcpreq",
+    "body": "let resp = binary.UTF8(socket.tcp_request(\"${1:127.0.0.1}\", ${2:80}, \"${3:GET / HTTP/1.1\\r\\n\\r\\n}\"))",
+    "description": "一行 TCP 请求便捷函数（服务端须主动关闭）"
+  },
+  "socket udp": {
+    "prefix": "sudp",
+    "body": [
+      "let us = socket.Socket(\"udp\")",
+      "let up = us.bind(\"0.0.0.0\", ${1:9000})",
+      "let uc = socket.Socket(\"udp\")",
+      "uc.connect_udp(\"127.0.0.1\", up)",
+      "uc.send(\"${2:ping}\")",
+      "let r = uc.recvfrom(${3:2048})",
+      "println(binary.UTF8(r[0]))"
+    ],
+    "description": "socket UDP 请求/响应（须先 connect_udp 固定源端口）"
+  },
+  "socket typed catch": {
+    "prefix": "scatch",
+    "body": [
+      "catch {",
+      "\t${1:socket.Socket(\"tcp\").connect(${2:host}, ${3:port})}",
+      "} match {",
+      "\tConnectError(e) -> println(\"连接失败: \" + e)",
+      "\tTimeoutError(e) -> println(\"超时: \" + e)",
+      "\tTLSError(e)     -> println(\"TLS 失败: \" + e)",
+      "\tSocketError(e)  -> println(\"其它: \" + e)",
+      "\t_ -> println(\"未匹配\")",
+      "}"
+    ],
+    "description": "按类型分流 socket 异常（带类型异常 match）"
+  },
+  "catch ensure": {
+    "prefix": "cens",
+    "body": [
+      "catch {",
+      "\t${1:do_something()}",
+      "} ensure {",
+      "\t${2:cleanup()}",
+      "}"
+    ],
+    "description": "catch ... ensure 清理块（无论是否异常都执行）"
+  },
+  "catch fallback": {
+    "prefix": "cfb",
+    "body": "let ${1:n} = ${2:parse_int(\"abc\")} catch ${3:0}",
+    "description": "单行兜底 expr catch 默认值"
+  },
+  "mutex": {
+    "prefix": "mtx",
+    "body": [
+      "let m = sync.Mutex()",
+      "m.lock()",
+      "${0}",
+      "m.unlock()"
+    ],
+    "description": "sync.Mutex 临界区（warp 协程间共享可变数据）"
+  },
+  "mutex try": {
+    "prefix": "mtxt",
+    "body": "if m.try_lock() { ${0} m.unlock() }",
+    "description": "sync.Mutex 非阻塞加锁（抢不到返回 false）"
   }
 }

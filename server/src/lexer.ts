@@ -38,7 +38,7 @@ const KEYWORDS = new Set([
   'defer', 'match', 'warp', 'import', 'package', 'as', 'do',
   'and', 'or', 'not', 'xor', 'matches', 'is',
   'this', 'main', 'init', 'panic', 'recover',
-  'try', 'catch', 'finally',
+  'try', 'catch', 'finally', 'ensure',
 ]);
 
 const TYPES = new Set([
