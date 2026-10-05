@@ -60,6 +60,12 @@
       "include": "#labels"
     },
     {
+      "include": "#ffi-types"
+    },
+    {
+      "include": "#ns-call"
+    },
+    {
       "include": "#identifiers"
     }
   ],
@@ -396,7 +402,7 @@
       "patterns": [
         {
           "name": "storage.type.yscript",
-          "match": "\\b(?:byte|char|short|ushort|int|uint|long|ulong|float|double|bool|string|bytes|list|dict|ipv4|ipv6|error|any|void)\\b"
+          "match": "\\b(?:byte|char|short|ushort|int|uint|long|ulong|float|double|bool|string|bytes|list|dict|ipv4|ipv6|error|any|void|clong|culong|ptr|cstring)\\b"
         }
       ]
     },
@@ -476,6 +482,34 @@
               "name": "punctuation.definition.label.yscript"
             }
           }
+        }
+      ]
+    },
+    "ffi-types": {
+      "patterns": [
+        {
+          "name": "support.type.ffi.yscript",
+          "match": "\\bstruct(?=:[A-Za-z0-9_]+(?::[A-Za-z0-9_]+)*\\b)"
+        },
+        {
+          "name": "support.type.ffi.yscript",
+          "match": "\\b(?:int8|uint8|int16|uint16|int32|uint32|int64|uint64)\\b"
+        }
+      ]
+    },
+    "ns-call": {
+      "patterns": [
+        {
+          "name": "variable.other.namespace.yscript",
+          "match": "\\b(?:aes|array|binary|c|color|compress|crypto|csv|cuda|encoding|errors|ffi|from|http|ini|io|iter|json|log|net|os|path|rand|raw|reflect|regex|rsa|socket|ssl|stdio|string|strings|sync|sys|thread|time|toml|url|xml|yaml)\\.(?=[A-Za-z_])"
+        },
+        {
+          "name": "entity.name.function.yscript",
+          "match": "(?<=c\\.)(?:compile|compile_load|compile_obj|link|load|unload|bind|find|call|callback|callback_free|parse_header|header_bind|compiler|compilers)\\b"
+        },
+        {
+          "name": "entity.name.function.yscript",
+          "match": "(?<=ffi\\.)(?:open|find|bind|call|alloc|free|read|write|str)\\b"
         }
       ]
     }

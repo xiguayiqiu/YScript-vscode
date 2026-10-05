@@ -8,7 +8,8 @@
 
 | 能力 | 说明 |
 |------|------|
-| 语法高亮 | 关键字、类型、内置函数、命名空间、字符串插值、Shell 反引号、bytes 字面量、注释、数字、常量、Test 表达式 |
+| 语法高亮 | 关键字、类型、内置函数、命名空间、字符串插值、Shell 反引号、bytes 字面量、注释、数字、常量、Test 表达式、**C/FFI 类型**（`struct:int32,double`、`clong`/`culong`、`ptr`/`cstring`） |
+| 命名空间补全 | `ns.` 之后补全该模块全部成员（38 个模块 / 741 个函数，含 `c.` 与 `ffi.`） |
 | 智能补全 | 关键字、类型、内置函数（250+）、struct 方法（`func this.`）、warp/WaitGroup 成员、dict/list 方法、import 路径 |
 | 悬停文档 | 关键字/类型/内置函数的中文说明 |
 | 跳转定义 | 跳转到 `func`/`let`/`const`/`struct`/`enum`/`interface` 声明 |
@@ -84,3 +85,23 @@
 ```
 
 未启用该主题时（例如使用默认 Seti 主题），`.ys` 文件仍会通过语言默认图标显示 YS logo。
+
+---
+
+## 维护：标准库成员数据从实现自动生成
+
+命名空间成员表 `server/src/ns_members.ts` **由脚本从解释器源码生成，不要手工编辑**：
+
+```bash
+cd yscript && python3 tools/gen_ns_members.py > ../vscode/server/src/ns_members.ts
+cd ../vscode && npm run compile      # 或 ./node_modules/.bin/tsc -p server/tsconfig.json
+```
+
+提取来源：
+1. `MakeNS("ns", map[string]value.BuiltinFunc{...})` —— 各命名空间注册表
+2. `buildCFuncNames()` —— `c` 模块（成员动态拼装，静态扫描抓不到）
+
+这样改了 `internal/std/*.go` 后重新生成即可，不会再出现「插件漏收录新函数」。
+
+新增代码片段前缀：`c call`、`c callback`、`c header bind`、`c parse header`、
+`ffi struct`、`ffi alloc`、`c variadic`、`raw pcap`、`worker`。

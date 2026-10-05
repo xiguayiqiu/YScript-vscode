@@ -45,6 +45,7 @@ import {
   TYPE_MEMBERS,
   TYPE_INFERENCE_RULES,
 } from './keywords';
+import { NS_MEMBERS, ALL_NAMESPACES, MODULE_NAMESPACE } from './ns_members';
 
 const connection = createConnection();
 const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
@@ -474,9 +475,23 @@ connection.onCompletion((params: CompletionParams): CompletionItem[] => {
     return getMemberCompletions(doc, text, offset - 1);
   }
 
-  // 2. import 后的路径
+  // 2. import 后的路径：补全内置模块名
   const beforeImport = text.slice(Math.max(0, offset - 50), offset);
   if (/(?:^|\n)\s*import\s+["']?[^"']*$/.test(beforeImport)) {
+    const quoted = /["'][^"']*$/.test(beforeImport);
+    const mods = [
+      ...new Set([...ALL_NAMESPACES, ...Object.keys(MODULE_NAMESPACE)]),
+    ].sort();
+    if (quoted) {
+      // 引号内：给模块名（含别名映射，string→strings、error→errors）
+      return mods.map((m) => ({
+        label: m,
+        kind: CompletionItemKind.Module,
+        detail: MODULE_NAMESPACE[m] && MODULE_NAMESPACE[m] !== m
+          ? `导入后使用 ${MODULE_NAMESPACE[m]}.xxx`
+          : '内置标准库模块',
+      }));
+    }
     return [
       { label: '"${1:path}"', kind: CompletionItemKind.Snippet, insertText: '"${1:path}"', detail: '模块路径' },
     ];
@@ -551,10 +566,24 @@ function getMemberCompletions(doc: TextDocument, text: string, dotOffset: number
   const receiver = text.slice(nameStart, dotOffset);
   if (!receiver) return [];
 
+  const members: CompletionItem[] = [];
+
+  // ── 1. 命名空间成员（binary. / c. / ffi. …）────────────────────
+  // 数据来自 ns_members.ts，由 yscript/tools/gen_ns_members.py 从
+  // internal/std/*.go 自动生成，故与实现始终一致。
+  const nsMembers = NS_MEMBERS[receiver];
+  if (nsMembers) {
+    return nsMembers.map((name) => ({
+      label: name,
+      kind: CompletionItemKind.Function,
+      detail: `${receiver} 模块成员`,
+    }));
+  }
+
+  // ── 2. 类型成员（list. / string. / dict. …）────────────────────
   // 解析类型
   const { varTypes } = analyzeDocument(doc);
   const type = varTypes.get(receiver);
-  const members: CompletionItem[] = [];
 
   // 若类型未知，给出通用 list/string 方法
   const candidateTypes: string[] = [];

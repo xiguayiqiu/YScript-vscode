@@ -231,9 +231,28 @@
   "import": {
     "prefix": "imp",
     "body": [
-      "import \"${1:path}\""
+      "import \"${1:string}\""
     ],
-    "description": "import 导入模块"
+    "description": "import 导入单个标准库模块"
+  },
+  "import list": {
+    "prefix": "impl",
+    "body": [
+      "import [",
+      "\t\"${1:string}\",",
+      "\t\"${2:io}\",",
+      "]"
+    ],
+    "description": "import 导入多个模块（列表）"
+  },
+  "import files": {
+    "prefix": "impf",
+    "body": [
+      "import [",
+      "\t\"${1:lib/util}\",",
+      "]"
+    ],
+    "description": "import 导入脚本文件 / 目录通配"
   },
   "struct": {
     "prefix": "st",
@@ -512,5 +531,90 @@
     "prefix": "mtxt",
     "body": "if m.try_lock() { ${0} m.unlock() }",
     "description": "sync.Mutex 非阻塞加锁（抢不到返回 false）"
+  },
+  "c call": {
+    "prefix": "c call",
+    "body": [
+      "let lib = c.compile_load(\"${1:mathx.c}\")",
+      "let fn = c.bind(lib, \"${2:func}\", \"${3:int}\", [\"${4:int}\"])",
+      "let r = c.call(fn, ${0:args})"
+    ],
+    "description": "编译并调用 C 函数"
+  },
+  "c callback": {
+    "prefix": "c callback",
+    "body": [
+      "let cb = c.callback(${1:myFunc}, \"${2:int32}\", [\"${3:int32}\"])",
+      "${0}",
+      "c.callback_free(cb)"
+    ],
+    "description": "把 YScript 函数作为 C 回调传入"
+  },
+  "c header bind": {
+    "prefix": "c header bind",
+    "body": [
+      "let lib = c.load(\"${1:/usr/lib/libc.so.6}\")",
+      "let fn = c.header_bind(lib, \"${2:/usr/include/stdio.h}\", \"${3:snprintf}\")"
+    ],
+    "description": "从头文件自动取签名并绑定"
+  },
+  "c parse header": {
+    "prefix": "c parse header",
+    "body": [
+      "let h = c.parse_header(\"${1:/usr/include/stdio.h}\")",
+      "let sig = h.get(\"${2:printf}\")",
+      "${0}"
+    ],
+    "description": "解析头文件获取函数签名"
+  },
+  "ffi struct call": {
+    "prefix": "ffi struct",
+    "body": [
+      "let fn = c.bind(lib, \"${1:func}\", \"struct:${2:int32},${3:double}\", [])",
+      "let r = c.call(fn, [${0:1}, 2.0])"
+    ],
+    "description": "结构体按值传参"
+  },
+  "ffi alloc": {
+    "prefix": "ffi alloc",
+    "body": [
+      "let p = ffi.alloc(${1:64})",
+      "${0}",
+      "ffi.free(p)"
+    ],
+    "description": "分配并释放真实 C 内存"
+  },
+  "c variadic": {
+    "prefix": "c variadic",
+    "body": [
+      "let snp = c.bind(libc, \"${1:snprintf}\", \"int\", [\"ptr\", \"ulong\", \"ptr\"], 3)",
+      "let buf = ffi.alloc(128)",
+      "c.call(snp, \"int\", [buf, 128, \"${2:%d items}\", ${3:42}])",
+      "${0}",
+      "ffi.free(buf)"
+    ],
+    "description": "变参函数调用（printf 一族）"
+  },
+  "raw pcap": {
+    "prefix": "raw pcap",
+    "body": [
+      "let h = raw.PcapOpen(\"${1:eth0}\", ${2:false})",
+      "while true {",
+      "\tlet p = raw.PcapNext(h)",
+      "\tif p == nil { break }",
+      "\t${0}",
+      "}"
+    ],
+    "description": "pcap 抓包循环"
+  },
+  "thread worker": {
+    "prefix": "worker",
+    "body": [
+      "let pool = sync.WorkerPool(${1:4})",
+      "pool.submit(func(x) { return x * ${2:2} })",
+      "let r = pool.wait()",
+      "${0}"
+    ],
+    "description": "线程池并发任务"
   }
 }

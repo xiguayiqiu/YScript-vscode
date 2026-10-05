@@ -10,7 +10,7 @@ exports.tokenize = tokenize;
 exports.analyze = analyze;
 exports.formatSource = formatSource;
 const KEYWORDS = new Set([
-    'let', 'const', 'func', 'struct', 'enum', 'interface',
+    'let', 'var', 'const', 'func', 'struct', 'enum', 'interface',
     'if', 'else', 'elif', 'switch', 'case', 'default',
     'for', 'in', 'range', 'while', 'loop', 'break', 'continue',
     'return', 'yield', 'goto', 'assert',
