@@ -10,7 +10,7 @@
       "}",
       ""
     ],
-    "description": "package main + main(args) 入口"
+    "description": "package main + main(args) 入口；可执行逻辑写在函数体内"
   },
   "function": {
     "prefix": "func",
@@ -243,7 +243,7 @@
       "\t\"${2:io}\",",
       "]"
     ],
-    "description": "import 导入多个模块（列表）"
+    "description": "import 方括号列表导入多个模块"
   },
   "import files": {
     "prefix": "impf",
@@ -252,7 +252,7 @@
       "\t\"${1:lib/util}\",",
       "]"
     ],
-    "description": "import 导入脚本文件 / 目录通配"
+    "description": "import 方括号列表导入脚本文件 / 目录通配"
   },
   "struct": {
     "prefix": "st",
@@ -303,6 +303,13 @@
     ],
     "description": "let 变量声明"
   },
+  "inferred declaration": {
+    "prefix": "infer",
+    "body": [
+      "${1:name} <- ${0:value}"
+    ],
+    "description": "<- 类型推断变量声明"
+  },
   "let typed": {
     "prefix": "lett",
     "body": [
@@ -330,8 +337,8 @@
       "let ${1:resp} = http.Get(\"${2:url}\")",
       "if ${1:resp}.status == 200 {",
       "\tprintln(${1:resp}.status)",
-      "\tprintln(${1:resp}.headers())",
-      "\tprintln(${1:resp}.body())",
+      "\tprintln(${1:resp}.headers)",
+      "\tprintln(${1:resp}.body)",
       "}",
       ""
     ],
@@ -343,11 +350,98 @@
       "let ${1:resp} = http.Get(\"${2:url}\")",
       "println(${1:resp}.status)",
       "println(http.Headers(${1:resp}, \"content-type\"))",
-      "println(${1:resp}.body())",
-      "println(${1:resp}.raw())",
+      "println(${1:resp}.body)",
+      "println(${1:resp}.raw)",
       ""
     ],
     "description": "HTTP 响应头/体/完整原始响应(类似Burp)"
+  },
+  "http session": {
+    "prefix": "hsess",
+    "body": [
+      "let ${1:s} = http.Session({",
+      "\t\"base_url\": \"${2:https://api.example.com}\",",
+      "\t\"headers\": {\"Authorization\": \"Bearer ${3:token}\"},",
+      "})",
+      "let ${4:resp} = ${1:s}.get(\"${5:/path}\")",
+      "if ${4:resp}.status == 200 {",
+      "\tprintln(http.Json(${4:resp}))",
+      "}",
+      ""
+    ],
+    "description": "HTTP 会话（共享 Cookie / 默认头，链式调用）"
+  },
+  "http form": {
+    "prefix": "hform",
+    "body": [
+      "let ${1:resp} = http.Form(\"${2:url}\", {\"${3:user}\": \"${4:admin}\"})",
+      "println(${1:resp}.status)",
+      ""
+    ],
+    "description": "HTTP 表单提交（自动 urlencoded 编码）"
+  },
+  "http upload": {
+    "prefix": "hup",
+    "body": [
+      "let ${1:resp} = http.Upload(\"${2:url}\", {\"file\": \"${3:/tmp/a.png}\"}, {\"${4:note}\": \"${5:x}\"})",
+      "println(${1:resp}.status)",
+      ""
+    ],
+    "description": "HTTP multipart 文件上传"
+  },
+  "http download": {
+    "prefix": "hdown",
+    "body": [
+      "let ${1:resp} = http.Download(\"${2:url}\", \"${3:/tmp/out.bin}\")",
+      "if ${1:resp}.status == 200 {",
+      "\tprintln(\"saved: \" + ${1:resp}.path + \" (\" + ${1:resp}.saved + \" bytes)\")",
+      "}",
+      ""
+    ],
+    "description": "HTTP 下载到文件"
+  },
+  "http server": {
+    "prefix": "hsvr",
+    "body": [
+      "let ${1:srv} = http.Server(\":${2:8080}\", func(req) {",
+      "\tif req.path == \"/${3:hello}\" {",
+      "\t\treturn {",
+      "\t\t\t\"status\": 200,",
+      "\t\t\t\"headers\": {\"Content-Type\": \"application/json\"},",
+      "\t\t\t\"body\": \"{\\\"ok\\\":true}\",",
+      "\t\t}",
+      "\t}",
+      "\treturn {\"status\": 404, \"body\": \"not found\"}",
+      "})",
+      "println(\"listening on :${2:8080}\")",
+      "# ${1:srv}.stop()",
+      ""
+    ],
+    "description": "HTTP 本地服务：单文件路由 + 默认 404"
+  },
+  "http status code": {
+    "prefix": "hsc",
+    "body": "println(http.StatusCode(${1:404}))",
+    "description": "HTTP 状态码释义（带分类与中文说明）"
+  },
+  "http retry backoff": {
+    "prefix": "hback",
+    "body": [
+      "http.SetRetries(${1:3})",
+      "http.SetRetryDelay(${2:0.5})",
+      "http.SetRetryBackoff(\"${3:linear}\")  # exp | linear | constant"
+    ],
+    "description": "HTTP 重试退避策略（指数 / 线性 / 固定）"
+  },
+  "http after response": {
+    "prefix": "hhk",
+    "body": [
+      "http.SetAfterResponse(func(resp) {",
+      "\tlog.info(\"http: \" + str(resp.status) + \" \" + str(resp.url))",
+      "\treturn resp",
+      "})"
+    ],
+    "description": "HTTP 全局响应后钩子（打日志/二次加工）"
   },
   "port scan": {
     "prefix": "pscan",
@@ -606,6 +700,42 @@
       "}"
     ],
     "description": "pcap 抓包循环"
+  },
+  "nginx static server": {
+    "prefix": "nginx",
+    "body": [
+      "import [\"net\"]",
+      "let ${1:srv} = net.nginx(\"${2:./public}\", \"${3::8080}\")",
+      "println(\"http://127.0.0.1:\" + string(${1:srv}.port))",
+      "${0}"
+    ],
+    "description": "静态目录 HTTP 服务"
+  },
+  "nginx TLS and access log": {
+    "prefix": "nginxtls",
+    "body": [
+      "import [\"net\"]",
+      "let ${1:opts} = {",
+      "\t\"tls\": {\"cert\": \"${2:./server.crt}\", \"key\": \"${3:./server.key}\"},",
+      "\t\"access_log\": true,",
+      "\t\"access_log_file\": \"${4:./access.log}\"",
+      "}",
+      "let ${5:srv} = net.nginx(\"${6:./public}\", \"${7::8443}\", ${1:opts})",
+      "println(\"https://127.0.0.1:\" + string(${5:srv}.port))",
+      "${0}"
+    ],
+    "description": "静态目录 HTTPS 服务与访问日志"
+  },
+  "nginx PHP site": {
+    "prefix": "nginxphp",
+    "body": [
+      "import [\"net\"]",
+      "let ${1:opts} = {\"php_cgi\": \"${2:php-cgi}\"}",
+      "let ${3:srv} = net.nginx(\"${4:./public}\", \"${5::8080}\", ${1:opts})",
+      "println(\"http://127.0.0.1:\" + string(${3:srv}.port))",
+      "${0}"
+    ],
+    "description": "启动支持 php-cgi 的 PHP 静态目录服务"
   },
   "thread worker": {
     "prefix": "worker",

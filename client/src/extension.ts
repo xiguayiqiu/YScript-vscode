@@ -6,8 +6,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
 import {
   workspace,
   ExtensionContext,
@@ -20,6 +18,17 @@ import {
   ConfigurationTarget,
   Range,
   WorkspaceEdit,
+  Diagnostic,
+  DiagnosticSeverity,
+  debug,
+  DebugAdapterDescriptor,
+  DebugAdapterDescriptorFactory,
+  DebugAdapterExecutable,
+  DebugAdapterServer,
+  DebugConfiguration,
+  DebugConfigurationProvider,
+  DebugSession,
+  WorkspaceFolder,
 } from 'vscode';
 import {
   LanguageClient,
@@ -31,10 +40,49 @@ import {
 } from 'vscode-languageclient/node';
 
 let client: LanguageClient | undefined;
+let clientReady: Promise<void> | undefined;
 let runTerminal: Terminal | undefined;
-let checkChannel: OutputChannel | undefined;
-const execFileAsync = promisify(execFile);
 const YSCRIPT_GITHUB_URL = 'https://github.com/xiguayiqiu/YScript';
+
+class YScriptDebugConfigurationProvider implements DebugConfigurationProvider {
+  resolveDebugConfiguration(
+    _folder: WorkspaceFolder | undefined,
+    config: DebugConfiguration,
+  ): DebugConfiguration | undefined {
+    if (!config.type) config.type = 'yscript';
+    if (!config.request) config.request = 'launch';
+    if (config.request === 'launch' && !config.program) config.program = '${file}';
+    if (config.request === 'attach') {
+      if (!config.program) config.program = '${file}';
+      if (!config.host) config.host = '127.0.0.1';
+      if (!config.port) config.port = 4711;
+    }
+    return config;
+  }
+}
+
+class YScriptDebugAdapterDescriptorFactory implements DebugAdapterDescriptorFactory {
+  async createDebugAdapterDescriptor(
+    session: DebugSession,
+  ): Promise<DebugAdapterDescriptor | undefined> {
+    if (session.configuration.request === 'attach') {
+      const host = String(session.configuration.host ?? '127.0.0.1');
+      const port = Number(session.configuration.port ?? 4711);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        throw new Error(`Invalid YScript debug adapter port: ${port}`);
+      }
+      return new DebugAdapterServer(port, host);
+    }
+
+    const ysc = await resolveYsc();
+    if (!ysc) return undefined;
+    const cwd =
+      typeof session.configuration.cwd === 'string'
+        ? session.configuration.cwd
+        : undefined;
+    return new DebugAdapterExecutable(ysc, ['debug-adapter'], { cwd });
+  }
+}
 
 /**
  * 在 PATH 中查找可执行文件（Windows 按 PATHEXT 补全扩展名）。
@@ -165,28 +213,18 @@ function getYScriptTerminal(cwd: string): Terminal {
   return runTerminal;
 }
 
-/** 运行 `ysc -c <file>` 做语法检查，通过返回 null，失败返回错误信息 */
-async function runCheck(ysc: string, filePath: string): Promise<string | null> {
-  try {
-    await execFileAsync(ysc, ['-c', filePath], { timeout: 30_000, windowsHide: true });
-    return null;
-  } catch (err) {
-    const e = err as { stdout?: string; stderr?: string; message?: string };
-    const msg = `${e.stdout ?? ''}${e.stderr ?? ''}`.trim();
-    return msg || e.message || 'ysc -c 检查失败';
-  }
-}
-
-function showCheckErrors(msg: string): void {
-  if (!checkChannel) checkChannel = window.createOutputChannel('YScript');
-  checkChannel.clear();
-  checkChannel.appendLine('=== ysc -c 语法检查未通过 ===');
-  checkChannel.appendLine(msg);
-  checkChannel.show(true);
-}
-
 export function activate(context: ExtensionContext) {
   const outputChannel = window.createOutputChannel('YScript Language Server', { log: true });
+  context.subscriptions.push(
+    debug.registerDebugConfigurationProvider(
+      'yscript',
+      new YScriptDebugConfigurationProvider(),
+    ),
+    debug.registerDebugAdapterDescriptorFactory(
+      'yscript',
+      new YScriptDebugAdapterDescriptorFactory(),
+    ),
+  );
 
   // 服务器选项：优先使用用户自定义路径，否则使用内置 Node 服务器
   const customPath: string = workspace.getConfiguration().get('yscript.server.path', '');
@@ -217,32 +255,85 @@ export function activate(context: ExtensionContext) {
      outputChannel,
     revealOutputChannelOn: RevealOutputChannelOn.Error,
     initializationOptions: {
-      yscriptVersion: '0.1.0',
+      yscriptVersion: '0.1.5.2',
     },
   };
 
   client = new LanguageClient('yscript', 'YScript Language Server', serverOptions, clientOptions);
 
   // 启动客户端
-  client.start().then(
-    () => {
-      outputChannel.appendLine('YScript LSP 已连接');
-    },
-    (err: Error) => {
-      outputChannel.appendLine(`YScript LSP 启动失败: ${err.message ?? err}`);
-      window.showErrorMessage(`YScript LSP 启动失败: ${err.message ?? err}`);
-    },
-  );
+  clientReady = client.start().then(() => {
+    outputChannel.appendLine('YScript LSP 已连接');
+  });
+  clientReady.catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    outputChannel.appendLine(`YScript LSP 启动失败: ${message}`);
+    window.showErrorMessage(`YScript LSP 启动失败: ${message}`);
+  });
 
   context.subscriptions.push(client);
 
-  // 手动重启命令
+  const reloadLanguageServer = async (): Promise<void> => {
+    if (!client) {
+      window.showWarningMessage('YScript language server is not running');
+      return;
+    }
+    try {
+      await client.stop();
+      clientReady = client.start();
+      await clientReady;
+      outputChannel.appendLine('YScript LSP 已重启');
+      window.showInformationMessage('YScript language server reloaded');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      outputChannel.appendLine(`YScript LSP 重启失败: ${message}`);
+      window.showErrorMessage(`YScript language server reload failed: ${message}`);
+    }
+  };
+
   context.subscriptions.push(
-    commands.registerCommand('yscript.restartServer', async () => {
-      if (client) {
-        await client.stop();
-        client.start();
-        window.showInformationMessage('YScript LSP 已重启');
+    commands.registerCommand('yscript.reloadLanguageServer', reloadLanguageServer),
+    commands.registerCommand('yscript.restartServer', reloadLanguageServer),
+  );
+
+  context.subscriptions.push(
+    commands.registerCommand('yscript.debugCurrentFile', async () => {
+      const editor = window.activeTextEditor;
+      if (!editor || editor.document.languageId !== 'yscript') {
+        window.showWarningMessage('YScript: 请先打开一个 .ys / .yscript 文件');
+        return;
+      }
+
+      const document = editor.document;
+      if (document.isDirty || document.isUntitled) {
+        const saved = await document.save();
+        if (!saved) {
+          window.showWarningMessage('YScript: 已取消调试，请先保存文件');
+          return;
+        }
+      }
+
+      const program = document.uri.fsPath;
+      const folder = workspace.getWorkspaceFolder(document.uri);
+      try {
+        const started = await debug.startDebugging(folder, {
+          type: 'yscript',
+          request: 'launch',
+          name: 'YScript: Current File',
+          program,
+          cwd: folder?.uri.fsPath ?? path.dirname(program),
+          stopOnEntry: true,
+          traceLines: true,
+        });
+        if (!started) {
+          window.showErrorMessage('YScript: 调试会话未能启动，请检查 ysc 路径和调试输出');
+          return;
+        }
+        await commands.executeCommand('workbench.debug.action.focusRepl');
+        window.setStatusBarMessage('YScript: 调试会话已启动，输出位于 Debug Console', 5000);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        window.showErrorMessage(`YScript: 启动调试失败: ${message}`);
       }
     }),
   );
@@ -254,7 +345,7 @@ export function activate(context: ExtensionContext) {
     }),
   );
 
-  // 运行当前脚本：编辑器标题栏 ▶ 按钮 / 命令面板（先 `ysc -c` 语法检查）
+  // 运行当前脚本：编辑器标题栏 ▶ 按钮 / 命令面板。语法诊断由语言服务器提供。
   context.subscriptions.push(
     commands.registerCommand('yscript.run', async () => {
       const editor = window.activeTextEditor;
@@ -281,16 +372,31 @@ export function activate(context: ExtensionContext) {
       }
 
       const filePath = doc.uri.fsPath;
-
-      // 1. 语法检查：未通过则不运行
-      const checkErr = await runCheck(ysc, filePath);
-      if (checkErr) {
-        showCheckErrors(checkErr);
-        window.showErrorMessage('YScript: 语法检查未通过，已取消运行');
+      if (!client) {
+        window.showErrorMessage('YScript: 语言服务器尚未启动，无法检查脚本语法');
+        return;
+      }
+      let diagnostics: Diagnostic[];
+      try {
+        await clientReady;
+        diagnostics = await client.sendRequest<Diagnostic[]>('yscript/checkDocument', {
+          uri: doc.uri.toString(),
+          text: doc.getText(),
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        outputChannel.appendLine(`运行前语法检查失败: ${message}`);
+        window.showErrorMessage(`YScript: 插件语法检查失败: ${message}`);
+        return;
+      }
+      const errors = diagnostics.filter(
+        (diagnostic) => diagnostic.severity === DiagnosticSeverity.Error && diagnostic.source === 'yscript',
+      );
+      if (errors.length > 0) {
+        window.showErrorMessage('YScript: 插件检测到语法错误，请先修复诊断后再运行');
         return;
       }
 
-      // 2. 运行脚本
       const terminal = getYScriptTerminal(path.dirname(filePath));
       terminal.show(true);
       terminal.sendText(`${shellQuote(ysc)} ${shellQuote(filePath)}`, true);

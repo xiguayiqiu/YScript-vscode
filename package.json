@@ -2,7 +2,7 @@
   "name": "yscript",
   "displayName": "yscript",
   "description": "YScript 语言支持：语法高亮、LSP 智能补全、悬停文档、跳转定义、代码片段（网安专用脚本语言）",
-  "version": "0.2.8",
+  "version": "0.2.11",
   "publisher": "yiqiua",
   "icon": "icon.png",
   "engines": {
@@ -23,9 +23,137 @@
   "main": "./client/out/extension.js",
   "activationEvents": [
     "onLanguage:yscript",
-    "onCommand:yscript.run"
+    "onCommand:yscript.run",
+    "onCommand:yscript.debugCurrentFile",
+    "onCommand:yscript.reloadLanguageServer",
+    "onView:yscript.debug",
+    "onDebug"
   ],
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "yscript-debug",
+          "title": "YScript Debug",
+          "icon": "./icons/yscript-debug.svg"
+        }
+      ]
+    },
+    "views": {
+      "yscript-debug": [
+        {
+          "id": "yscript.debug",
+          "name": "调试",
+          "icon": "./icons/yscript-debug.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "yscript.debug",
+        "contents": "打开 YScript 文件后开始调试。\n\n[调试当前文件](command:yscript.debugCurrentFile)\n\n[打开变量、调用栈、Watch 和 Debug Console](command:workbench.view.debug)"
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "yscript"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "yscript",
+        "label": "YScript",
+        "languages": [
+          "yscript"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "YScript 源文件路径",
+                "default": "${file}"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "传递给脚本的命令行参数"
+              },
+              "cwd": {
+                "type": "string",
+                "description": "调试器工作目录",
+                "default": "${workspaceFolder}"
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "在第一条可执行语句暂停",
+                "default": false
+              },
+              "traceLines": {
+                "type": "boolean",
+                "description": "将逐行执行钩子输出到调试控制台",
+                "default": false
+              },
+              "traceCalls": {
+                "type": "boolean",
+                "description": "将函数调用/返回钩子输出到调试控制台",
+                "default": false
+              }
+            }
+          },
+          "attach": {
+            "required": [
+              "program",
+              "host",
+              "port"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "远程调试目标机上的 YScript 源文件路径"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "传递给脚本的命令行参数"
+              },
+              "host": {
+                "type": "string",
+                "default": "127.0.0.1"
+              },
+              "port": {
+                "type": "number",
+                "default": 4711
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "name": "YScript: Current File",
+            "type": "yscript",
+            "request": "launch",
+            "program": "${file}",
+            "cwd": "${workspaceFolder}"
+          },
+          {
+            "name": "YScript: Attach",
+            "type": "yscript",
+            "request": "attach",
+            "program": "${file}",
+            "host": "127.0.0.1",
+            "port": 4711
+          }
+        ]
+      }
+    ],
     "commands": [
       {
         "command": "yscript.run",
@@ -33,9 +161,18 @@
         "icon": "$(play)"
       },
       {
+        "command": "yscript.debugCurrentFile",
+        "title": "YScript: Debug Current File",
+        "icon": "$(debug-start)"
+      },
+      {
         "command": "yscript.format",
         "title": "YScript: 格式化文档 (Format Document)",
         "icon": "$(format)"
+      },
+      {
+        "command": "yscript.reloadLanguageServer",
+        "title": "Reload Language YScript"
       }
     ],
     "menus": {
@@ -53,10 +190,54 @@
           "group": "navigation@1"
         }
       ],
+      "view/title": [
+        {
+          "command": "workbench.action.debug.continue",
+          "when": "debugType == yscript && debugState == stopped",
+          "group": "navigation@1"
+        },
+        {
+          "command": "workbench.action.debug.pause",
+          "when": "debugType == yscript && debugState == running",
+          "group": "navigation@1"
+        },
+        {
+          "command": "workbench.action.debug.stepOver",
+          "when": "debugType == yscript && debugState == stopped",
+          "group": "navigation@2"
+        },
+        {
+          "command": "workbench.action.debug.stepInto",
+          "when": "debugType == yscript && debugState == stopped",
+          "group": "navigation@3"
+        },
+        {
+          "command": "workbench.action.debug.stepOut",
+          "when": "debugType == yscript && debugState == stopped",
+          "group": "navigation@4"
+        },
+        {
+          "command": "workbench.action.debug.stop",
+          "when": "debugType == yscript",
+          "group": "navigation@5"
+        },
+        {
+          "command": "yscript.debugCurrentFile",
+          "when": "view == yscript.debug",
+          "group": "navigation"
+        }
+      ],
       "commandPalette": [
         {
           "command": "yscript.run",
           "when": "resourceLangId == yscript"
+        },
+        {
+          "command": "yscript.debugCurrentFile",
+          "when": "resourceLangId == yscript"
+        },
+        {
+          "command": "yscript.reloadLanguageServer"
         }
       ]
     },
@@ -92,6 +273,11 @@
         "path": "./snippets/yscript.json"
       }
     ],
+    "configurationDefaults": {
+      "[yscript]": {
+        "editor.glyphMargin": true
+      }
+    },
     "iconThemes": [
       {
         "id": "yscript-icons",
@@ -121,7 +307,7 @@
         "yscript.ysc.path": {
           "type": "string",
           "default": "",
-          "description": "YScript 解释器 (ysc) 可执行文件路径。留空时按 YSC_BIN 环境变量 → PATH 顺序自动查找；找不到时会提示打开 GitHub 下载页或手动指定路径。"
+          "description": "运行 YScript 脚本所用的解释器 (ysc) 可执行文件路径。语法检查由插件自身完成；运行时留空则按 YSC_BIN 环境变量 → PATH 顺序查找。"
         },
         "yscript.format.tabSize": {
           "type": "number",

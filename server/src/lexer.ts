@@ -11,6 +11,7 @@ export type TokenType =
   | 'literal'
   | 'number'
   | 'string'
+  | 'regexp'
   | 'shell'
   | 'bytes'
   | 'comment'
@@ -31,18 +32,20 @@ export interface Token {
 }
 
 const KEYWORDS = new Set([
-  'let', 'var', 'const', 'func', 'struct', 'enum', 'interface',
+  'let', 'var', 'const', 'func', 'struct', 'class', 'enum', 'interface',
   'if', 'else', 'elif', 'switch', 'case', 'default',
-  'for', 'in', 'range', 'while', 'loop', 'break', 'continue',
+  'for', 'in', 'range', 'while', 'loop', 'break', 'continue', 'await',
   'return', 'yield', 'goto', 'assert',
-  'defer', 'match', 'warp', 'import', 'package', 'as', 'do',
+  'defer', 'match', 'warp', 'import', 'package', 'as', 'do', 'using',
+  'namespace', 'extends', 'super', 'map',
   'and', 'or', 'not', 'xor', 'matches', 'is',
   'this', 'main', 'init', 'panic', 'recover',
-  'try', 'catch', 'finally', 'ensure',
+  'try', 'catch', 'finally', 'ensure', 'raise',
 ]);
 
 const TYPES = new Set([
   'byte', 'char', 'short', 'ushort', 'int', 'uint', 'long', 'ulong',
+  'int8', 'uint8', 'int16', 'uint16', 'int32', 'uint32', 'int64', 'uint64',
   'float', 'double', 'bool', 'string', 'bytes', 'list', 'dict',
   'ipv4', 'ipv6', 'command', 'error', 'void',
 ]);
@@ -103,13 +106,67 @@ export function tokenize(source: string): Token[] {
     // 块注释 (#* ... *#)
     if (ch === '#' && source[i + 1] === '*') {
       let j = i + 2;
-      while (j < len && !(source[j] === '*' && source[j + 1] === '#')) {
+      let depth = 1;
+      while (j < len && depth > 0) {
+        if (source[j] === '#' && source[j + 1] === '*') {
+          depth++;
+          j += 2;
+          continue;
+        }
+        if (source[j] === '*' && source[j + 1] === '#') {
+          depth--;
+          j += 2;
+          continue;
+        }
         if (source[j] === '\n') { line++; col = 1; j++; continue; }
         j++;
       }
-      j = Math.min(j + 2, len);
       push('comment', source.slice(i, j), start, j, startLine, startCol);
-      col += (j - i); i = j;
+      const lastNewline = source.lastIndexOf('\n', j - 1);
+      col = lastNewline >= i ? j - lastNewline : col + (j - i);
+      i = j;
+      continue;
+    }
+    if (ch === '/' && source[i + 1] === '/') {
+      let j = i + 2;
+      while (j < len && source[j] !== '\n') j++;
+      push('comment', source.slice(i, j), start, j, startLine, startCol);
+      col += j - i; i = j;
+      continue;
+    }
+    if (ch === '/' && source[i + 1] === '*') {
+      let j = i + 2;
+      let depth = 1;
+      while (j < len && depth > 0) {
+        if (source[j] === '/' && source[j + 1] === '*') { depth++; j += 2; continue; }
+        if (source[j] === '*' && source[j + 1] === '/') { depth--; j += 2; continue; }
+        if (source[j] === '\n') { line++; col = 1; j++; continue; }
+        j++;
+      }
+      push('comment', source.slice(i, j), start, j, startLine, startCol);
+      const lastNewline = source.lastIndexOf('\n', j - 1);
+      col = lastNewline >= i ? j - lastNewline : col + (j - i);
+      i = j;
+      continue;
+    }
+
+    // 字符串插值
+    if (ch === '$' && source[i + 1] === '"') {
+      let j = i + 2;
+      while (j < len) {
+        if (source[j] === '\\') {
+          if (source[j + 1] === '\n') { line++; col = 1; }
+          j += 2;
+          continue;
+        }
+        if (source[j] === '"') { j++; break; }
+        if (source[j] === '\n') { line++; col = 1; j++; continue; }
+        j++;
+      }
+      push('string', source.slice(i, j), start, j, startLine, startCol);
+      const lastNewline = source.lastIndexOf('\n', j - 1);
+      col = lastNewline >= i ? j - lastNewline : col + (j - i);
+      i = j;
       continue;
     }
 
@@ -117,12 +174,19 @@ export function tokenize(source: string): Token[] {
     if (ch === '`') {
       let j = i + 1;
       while (j < len && source[j] !== '`') {
+        if (source[j] === '\\') {
+          if (source[j + 1] === '\n') { line++; col = 1; }
+          j += 2;
+          continue;
+        }
         if (source[j] === '\n') { line++; col = 1; j++; continue; }
         j++;
       }
       j = Math.min(j + 1, len);
       push('shell', source.slice(i, j), start, j, startLine, startCol);
-      col += (j - i); i = j;
+      const lastNewline = source.lastIndexOf('\n', j - 1);
+      col = lastNewline >= i ? j - lastNewline : col + (j - i);
+      i = j;
       continue;
     }
 
@@ -130,28 +194,70 @@ export function tokenize(source: string): Token[] {
     if (ch === 'b' && source[i + 1] === '"') {
       let j = i + 2;
       while (j < len && source[j] !== '"') {
-        if (source[j] === '\\') j++;
+        if (source[j] === '\\') {
+          if (source[j + 1] === '\n') { line++; col = 1; }
+          j += 2;
+          continue;
+        }
         if (source[j] === '\n') { line++; col = 1; j++; continue; }
         j++;
       }
       j = Math.min(j + 1, len);
       push('bytes', source.slice(i, j), start, j, startLine, startCol);
-      col += (j - i); i = j;
+      const lastNewline = source.lastIndexOf('\n', j - 1);
+      col = lastNewline >= i ? j - lastNewline : col + (j - i);
+      i = j;
       continue;
     }
 
-    // 普通字符串
-    if (ch === '"') {
+    // 普通字符串（YScript 接受单引号和双引号）
+    if (ch === '"' || ch === "'") {
       let j = i + 1;
-      while (j < len && source[j] !== '"') {
-        if (source[j] === '\\') j++;
+      while (j < len && source[j] !== ch) {
+        if (source[j] === '\\') {
+          if (source[j + 1] === '\n') { line++; col = 1; }
+          j += 2;
+          continue;
+        }
         if (source[j] === '\n') { line++; col = 1; j++; continue; }
         j++;
       }
       j = Math.min(j + 1, len);
       push('string', source.slice(i, j), start, j, startLine, startCol);
-      col += (j - i); i = j;
+      const lastNewline = source.lastIndexOf('\n', j - 1);
+      col = lastNewline >= i ? j - lastNewline : col + (j - i);
+      i = j;
       continue;
+    }
+
+    // 正则字面量 /pattern/flags：仅在表达式起始位置识别，避免把除法误作正则。
+    if (ch === '/') {
+      let previous = tokens.length - 1;
+      while (previous >= 0 && tokens[previous].type === 'comment') previous--;
+      const prior = tokens[previous];
+      const followsOperand = prior && (
+        ['identifier', 'builtin', 'type', 'number', 'string', 'regexp', 'literal'].includes(prior.type) ||
+        [')', ']'].includes(prior.value) ||
+        ['true', 'false', 'nil', 'return'].includes(prior.value)
+      );
+      if (!followsOperand) {
+        let j = i + 1;
+        let inClass = false;
+        let closed = false;
+        while (j < len && source[j] !== '\n') {
+          if (source[j] === '\\') { j += 2; continue; }
+          if (source[j] === '[') inClass = true;
+          else if (source[j] === ']') inClass = false;
+          else if (source[j] === '/' && !inClass) { closed = true; j++; break; }
+          j++;
+        }
+        if (closed) {
+          while (j < len && /[imsU]/.test(source[j])) j++;
+          push('regexp', source.slice(i, j), start, j, startLine, startCol);
+          col += j - i; i = j;
+          continue;
+        }
+      }
     }
 
     // 数字
@@ -217,8 +323,18 @@ export function tokenize(source: string): Token[] {
     if (three === '<<=' || three === '>>=' || three === '||' && source[i] === '|') {
       // skip, fall to single char handle
     }
+    if (['<<=', '>>='].includes(three)) {
+      push('operator', three, start, i + 3, startLine, startCol);
+      col += 3; i += 3;
+      continue;
+    }
+    if (['...', '??=', '|>>'].includes(three)) {
+      push('operator', three, start, i + 3, startLine, startCol);
+      col += 3; i += 3;
+      continue;
+    }
     if (['==', '!=', '<=', '>=', '&&', '||', '<<', '>>', '+=', '-=', '*=', '/=', '%=',
-      '&=', '|=', '^=', '=>', '::', '?:', '?.'].includes(two)) {
+      '&=', '|=', '^=', '=>', '->', '<-', '::', '?:', '?.', '??', '..', '|>', '@>'].includes(two)) {
       push('operator', two, start, i + 2, startLine, startCol);
       col += 2; i += 2;
       continue;
@@ -259,9 +375,19 @@ export function analyze(tokens: Token[], source: string): Diagnostic[] {
   const stack: { ch: string; line: number; col: number; pos: number }[] = [];
   const pairs: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
   const lineMap = computeLineMap(source);
+  const ignoredTokens = tokens.filter((token) =>
+    ['comment', 'string', 'bytes', 'shell', 'regexp'].includes(token.type),
+  );
+  let ignoredIndex = 0;
 
   let i = 0;
   while (i < source.length) {
+    while (ignoredIndex < ignoredTokens.length && ignoredTokens[ignoredIndex].end <= i) ignoredIndex++;
+    if (ignoredTokens[ignoredIndex]?.start === i) {
+      i = ignoredTokens[ignoredIndex].end;
+      ignoredIndex++;
+      continue;
+    }
     const ch = source[i];
     if (ch === '\n') { i++; continue; }
     // 跳过字符串和注释（yscript 注释：# 行注释、#* ... *# 块注释）
