@@ -2,7 +2,7 @@
   "name": "yscript",
   "displayName": "yscript",
   "description": "YScript 语言支持：语法高亮、LSP 智能补全、悬停文档、跳转定义、代码片段（网安专用脚本语言）",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "publisher": "yiqiua",
   "icon": "icon.png",
   "engines": {
@@ -25,6 +25,7 @@
     "onLanguage:yscript",
     "onCommand:yscript.run",
     "onCommand:yscript.debugCurrentFile",
+    "onCommand:yscript.format",
     "onCommand:yscript.reloadLanguageServer",
     "onView:yscript.debug",
     "onDebug"
@@ -237,6 +238,10 @@
           "when": "resourceLangId == yscript"
         },
         {
+          "command": "yscript.format",
+          "when": "resourceLangId == yscript"
+        },
+        {
           "command": "yscript.reloadLanguageServer"
         }
       ]
@@ -258,6 +263,18 @@
           "dark": "./icons/yscript-logo-dark.png"
         },
         "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "yscmanifest",
+        "aliases": [
+          "YScript Manifest",
+          "yscmanifest"
+        ],
+        "extensions": [],
+        "filenames": [
+          "ysc.models",
+          "ysc.sum"
+        ]
       }
     ],
     "grammars": [
@@ -265,6 +282,11 @@
         "language": "yscript",
         "scopeName": "source.yscript",
         "path": "./syntaxes/yscript.tmLanguage.json"
+      },
+      {
+        "language": "yscmanifest",
+        "scopeName": "source.yscmanifest",
+        "path": "./syntaxes/yscmanifest.tmLanguage.json"
       }
     ],
     "snippets": [

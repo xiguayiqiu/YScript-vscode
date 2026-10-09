@@ -26,6 +26,67 @@ function validName(token) {
     return token?.type === 'identifier' || token?.type === 'type' || token?.type === 'builtin' ||
         (token?.type === 'keyword' && (token.value === 'main' || token.value === 'init'));
 }
+function skipTypeParameters(tokens, start) {
+    if (tokens[start]?.value !== '<')
+        return { next: start };
+    let i = start + 1;
+    let expectName = true;
+    let sawParameter = false;
+    while (i < tokens.length) {
+        if (expectName) {
+            if (tokens[i]?.value === '>' && sawParameter)
+                return { next: i + 1 };
+            if (tokens[i]?.type !== 'identifier')
+                return { next: i, error: tokens[i] };
+            sawParameter = true;
+            i++;
+            if (tokens[i]?.value === ':') {
+                i++;
+                if (!validName(tokens[i]))
+                    return { next: i, error: tokens[i] };
+                i++;
+            }
+            expectName = false;
+            continue;
+        }
+        if (tokens[i]?.value === ',') {
+            i++;
+            expectName = true;
+        }
+        else if (tokens[i]?.value === '>') {
+            return { next: i + 1 };
+        }
+        else {
+            return { next: i, error: tokens[i] };
+        }
+    }
+    return { next: i, error: tokens[start] };
+}
+function genericClosingOperators(tokens) {
+    const openings = [];
+    const closings = new Set();
+    const isTypeName = (token) => token?.type === 'identifier' || token?.type === 'type' || token?.type === 'builtin';
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i];
+        if (token.value === '<' && isTypeName(tokens[i - 1])) {
+            openings.push(i);
+            continue;
+        }
+        if (token.value !== '>' && token.value !== '>>')
+            continue;
+        const count = token.value === '>>' ? 2 : 1;
+        if (openings.length < count)
+            continue;
+        const matchedOpenings = openings.splice(openings.length - count, count);
+        const validContents = matchedOpenings.every((open) => tokens.slice(open + 1, i).every((part) => isTypeName(part) || [',', ':', '<', '>', '>>'].includes(part.value)));
+        const next = tokens[i + 1];
+        const validEnd = next && (next.line > token.line ||
+            ['(', ')', '[', ']', '{', '}', ',', ';', ':', '=', '->', '.', '?.'].includes(next.value));
+        if (validContents && validEnd)
+            closings.add(i);
+    }
+    return closings;
+}
 function hasClosingQuote(value, quote) {
     if (!value.endsWith(quote))
         return false;
@@ -110,6 +171,7 @@ function validateImportList(tokens, open, close) {
 function syntaxDiagnostics(tokens) {
     const diagnostics = [];
     const reported = new Set();
+    const genericClosings = genericClosingOperators(tokens);
     const report = (token, message) => {
         const key = `${token.start}:${message}`;
         if (reported.has(key))
@@ -155,7 +217,7 @@ function syntaxDiagnostics(tokens) {
                 report(token, '赋值运算符后需要表达式');
             }
         }
-        if (['+', '-', '*', '/', '%', '==', '!=', '<', '>', '<=', '>=', '&&', '||', '<<', '>>',
+        if (!genericClosings.has(i) && ['+', '-', '*', '/', '%', '==', '!=', '<', '>', '<=', '>=', '&&', '||', '<<', '>>',
             '&', '|', '^', '|>', 'in', 'matches', 'is', 'and', 'or', 'xor', '?', 'not'].includes(token.value)) {
             const next = tokens[i + 1];
             if (!next || ['}', ')', ']', ';', ','].includes(next.value)) {
@@ -168,7 +230,6 @@ function syntaxDiagnostics(tokens) {
         }
     }
     let packageName = '';
-    let packageToken;
     let packageCount = 0;
     let mainCount = 0;
     let lastTypeName = '';
@@ -187,7 +248,6 @@ function syntaxDiagnostics(tokens) {
             continue;
         if (token.value === 'package') {
             packageCount++;
-            packageToken = packageToken ?? token;
             const name = tokens[i + 1];
             if (!validName(name))
                 report(token, 'package 后需要包名');
@@ -226,6 +286,10 @@ function syntaxDiagnostics(tokens) {
             }
             lastTypeName = name.value;
             let open = i + 2;
+            const typeParams = skipTypeParameters(tokens, open);
+            if (typeParams.error)
+                report(typeParams.error, '泛型类型参数格式不正确');
+            open = typeParams.next;
             if (tokens[open]?.value === 'extends')
                 open += 2;
             if (tokens[open]?.value !== '{')
@@ -262,7 +326,13 @@ function syntaxDiagnostics(tokens) {
             if (mainCount > 1)
                 report(token, 'func main() 重复定义');
         }
-        const open = token.value === 'init' ? i + 1 : nameIndex + 1;
+        let open = token.value === 'init' ? i + 1 : nameIndex + 1;
+        if (!method && token.value === 'func') {
+            const typeParams = skipTypeParameters(tokens, open);
+            if (typeParams.error)
+                report(typeParams.error, '泛型函数类型参数格式不正确');
+            open = typeParams.next;
+        }
         if (tokens[open]?.value !== '(') {
             report(tokens[open] ?? name, token.value === 'init' ? 'init 后缺少 (' : '函数名后缺少 (');
             continue;
@@ -305,9 +375,6 @@ function syntaxDiagnostics(tokens) {
         if (!method && name.value === 'main' && packageName !== 'main') {
             report(token, 'func main() 必须在 package main 下声明');
         }
-    }
-    if (packageName === 'main' && mainCount === 0 && packageToken) {
-        report(packageToken, 'package main 必须包含 func main() 入口');
     }
     return diagnostics;
 }

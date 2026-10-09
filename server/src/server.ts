@@ -620,7 +620,6 @@ function validate(doc: TextDocument): LSPDiagnostic[] {
       message: d.message,
       severity: DiagnosticSeverity.Error,
       source: d.source,
-      data: d.message.includes('package main 必须包含 func main()') ? { missingPackageMain: true } : undefined,
     });
   }
 
@@ -763,21 +762,6 @@ connection.onCodeAction((params: CodeActionParams): CodeAction[] => {
 
   for (const diag of params.context.diagnostics) {
     const data = diag.data as { module?: string; ns?: string; permissionCategory?: string } | undefined;
-    if ((data as { missingPackageMain?: boolean } | undefined)?.missingPackageMain) {
-      const firstLine = text.split(/\r?\n/, 1)[0];
-      const insertLine = /^#!\s*\//.test(firstLine) ? 1 : 0;
-      actions.push({
-        title: '添加 package main',
-        kind: CodeActionKind.QuickFix,
-        diagnostics: [diag],
-        edit: {
-          changes: {
-            [params.textDocument.uri]: [TextEdit.insert({ line: insertLine, character: 0 }, 'package main\n\n')],
-          },
-        },
-      });
-      continue;
-    }
     if (data?.permissionCategory) {
       const category = data.permissionCategory;
       const declared = declaredPermissionCategories(text);

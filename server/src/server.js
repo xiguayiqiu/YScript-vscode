@@ -603,7 +603,6 @@ function validate(doc) {
             message: d.message,
             severity: node_1.DiagnosticSeverity.Error,
             source: d.source,
-            data: d.message.includes('package main 必须包含 func main()') ? { missingPackageMain: true } : undefined,
         });
     }
     const seenFunctionNames = new Set();
@@ -742,21 +741,6 @@ connection.onCodeAction((params) => {
     const actions = [];
     for (const diag of params.context.diagnostics) {
         const data = diag.data;
-        if (data?.missingPackageMain) {
-            const firstLine = text.split(/\r?\n/, 1)[0];
-            const insertLine = /^#!\s*\//.test(firstLine) ? 1 : 0;
-            actions.push({
-                title: '添加 package main',
-                kind: node_1.CodeActionKind.QuickFix,
-                diagnostics: [diag],
-                edit: {
-                    changes: {
-                        [params.textDocument.uri]: [node_1.TextEdit.insert({ line: insertLine, character: 0 }, 'package main\n\n')],
-                    },
-                },
-            });
-            continue;
-        }
         if (data?.permissionCategory) {
             const category = data.permissionCategory;
             const declared = declaredPermissionCategories(text);

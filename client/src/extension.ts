@@ -6,6 +6,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawn } from 'child_process';
 import {
   workspace,
   ExtensionContext,
@@ -59,6 +60,37 @@ class YScriptDebugConfigurationProvider implements DebugConfigurationProvider {
     }
     return config;
   }
+}
+
+function formatWithYsc(yscPath: string, source: string, cwd: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(yscPath, ['fmt', '-t'], { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    let settled = false;
+    child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
+    child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
+    child.once('error', (err) => {
+      settled = true;
+      reject(new Error(`无法启动 ysc fmt: ${err.message}`));
+    });
+    child.once('close', (code, signal) => {
+      if (settled) return;
+      settled = true;
+      if (code !== 0) {
+        const detail = Buffer.concat(stderr).toString('utf8').trim();
+        reject(new Error(detail || `ysc fmt 退出，状态码 ${code ?? signal ?? 'unknown'}`));
+        return;
+      }
+      resolve(Buffer.concat(stdout).toString('utf8'));
+    });
+    child.stdin.once('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EPIPE' || settled) return;
+      settled = true;
+      reject(new Error(`向 ysc fmt 发送源码失败: ${err.message}`));
+    });
+    child.stdin.end(source);
+  });
 }
 
 class YScriptDebugAdapterDescriptorFactory implements DebugAdapterDescriptorFactory {
@@ -255,7 +287,7 @@ export function activate(context: ExtensionContext) {
      outputChannel,
     revealOutputChannelOn: RevealOutputChannelOn.Error,
     initializationOptions: {
-      yscriptVersion: '0.1.5.2',
+      yscriptVersion: '0.1.5.3',
     },
   };
 
@@ -403,8 +435,7 @@ export function activate(context: ExtensionContext) {
     }),
   );
 
-  // 格式化当前文档（右键菜单 / 命令面板）。
-  // 直接复用服务端 lexer 的 formatSource，不依赖 LSP 协商，保证右键点击必定生效。
+  // 格式化当前文档（右键菜单 / 命令面板），与 CLI 使用相同的 ysc 格式化器。
   context.subscriptions.push(
     commands.registerCommand('yscript.format', async () => {
       const editor = window.activeTextEditor;
@@ -412,14 +443,12 @@ export function activate(context: ExtensionContext) {
       if (editor.document.languageId !== 'yscript') return;
 
       try {
-        // 服务端 lexer.js 无外部依赖（纯 JS），客户端可直接 require
-        const lexer = require(path.join(context.extensionPath, 'server', 'out', 'lexer.js'));
+        const ysc = await resolveYsc();
+        if (!ysc) return;
         const text = editor.document.getText();
-        const tabSize =
-          typeof editor.options.tabSize === 'number'
-            ? editor.options.tabSize
-            : 4;
-        const newText = lexer.formatSource(text, tabSize);
+        const folder = workspace.getWorkspaceFolder(editor.document.uri);
+        const cwd = folder?.uri.fsPath ?? path.dirname(editor.document.uri.fsPath);
+        const newText = await formatWithYsc(ysc, text, cwd);
 
         if (newText === text) {
           window.setStatusBarMessage('YScript: 已是最佳格式', 3000);

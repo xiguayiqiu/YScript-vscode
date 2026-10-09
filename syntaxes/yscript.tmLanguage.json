@@ -9,6 +9,9 @@
   "firstLineMatch": "^#!",
   "patterns": [
     {
+      "include": "#doc-annotation"
+    },
+    {
       "include": "#preprocessor"
     },
     {
@@ -70,6 +73,15 @@
     }
   ],
   "repository": {
+    "doc-annotation": {
+      "name": "meta.annotation.documentation.yscript",
+      "match": "^\\s*(@\\s*[A-Za-z_][A-Za-z0-9_]*\\s+(?:HEAD|END)|@\\s+[A-Za-z_][A-Za-z0-9_]*\\s+(?:HEAD|END))\\s*$",
+      "captures": {
+        "1": {
+          "name": "keyword.control.documentation.yscript"
+        }
+      }
+    },
     "identifier": {
       "match": "[A-Za-z_][A-Za-z0-9_]*",
       "name": "variable.other.yscript"
@@ -332,6 +344,79 @@
     "declarations": {
       "patterns": [
         {
+          "name": "meta.function.generic.yscript",
+          "begin": "\\b(func)\\s+(this\\.)?([A-Za-z_][A-Za-z0-9_]*)(\\s*)(<)",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.declaration.yscript"
+            },
+            "2": {
+              "name": "keyword.other.unit.yscript"
+            },
+            "3": {
+              "name": "entity.name.function.yscript"
+            },
+            "5": {
+              "name": "punctuation.definition.typeparameters.begin.yscript"
+            }
+          },
+          "end": ">",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.typeparameters.end.yscript"
+            }
+          },
+          "patterns": [
+            {
+              "name": "storage.type.generic.parameter.yscript",
+              "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*(?:,|>|:))"
+            },
+            {
+              "match": ":\\s*([A-Za-z_][A-Za-z0-9_]*)",
+              "captures": {
+                "1": {
+                  "name": "storage.type.generic.constraint.yscript"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "meta.type.generic.yscript",
+          "begin": "\\b(struct)\\s+([A-Za-z_][A-Za-z0-9_]*)(\\s*)(<)",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.declaration.yscript"
+            },
+            "2": {
+              "name": "entity.name.type.yscript"
+            },
+            "4": {
+              "name": "punctuation.definition.typeparameters.begin.yscript"
+            }
+          },
+          "end": ">",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.typeparameters.end.yscript"
+            }
+          },
+          "patterns": [
+            {
+              "name": "storage.type.generic.parameter.yscript",
+              "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*(?:,|>|:))"
+            },
+            {
+              "match": ":\\s*([A-Za-z_][A-Za-z0-9_]*)",
+              "captures": {
+                "1": {
+                  "name": "storage.type.generic.constraint.yscript"
+                }
+              }
+            }
+          ]
+        },
+        {
           "name": "meta.variable.inferred.yscript",
           "match": "([A-Za-z_][A-Za-z0-9_]*)(\\s*)(<-)",
           "captures": {
@@ -412,6 +497,21 @@
     },
     "types": {
       "patterns": [
+        {
+          "name": "storage.type.generic.yscript",
+          "match": "\\b[A-Z][A-Za-z0-9_]*(?=\\s*<)"
+        },
+        {
+          "match": "([<,])(\\s*)([A-Za-z_][A-Za-z0-9_]*)(?=\\s*(?:,|>|:))",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.typeparameters.yscript"
+            },
+            "3": {
+              "name": "storage.type.generic.argument.yscript"
+            }
+          }
+        },
         {
           "name": "storage.type.yscript",
           "match": "\\b(?:byte|char|short|ushort|int|uint|long|ulong|float|double|bool|string|bytes|list|dict|ipv4|ipv6|error|any|void|clong|culong|ptr|cstring)\\b"

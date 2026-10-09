@@ -2,7 +2,19 @@
 
 为 YScript（网安专用脚本语言）提供 VSCode 完整支持：语法高亮、LSP 智能补全、悬停文档、跳转定义、代码片段。
 
-当前适配 YScript 解释器 `v0.1.5.2`；VS Code 扩展包版本独立管理。
+当前适配 YScript 解释器 `v0.1.5.3`；VS Code 扩展包版本独立管理。扩展可识别并高亮 `ysc.models` / `ysc.sum` 项目依赖清单。
+
+## 项目依赖清单
+
+`ysc.models` 和 `ysc.sum` 使用独立的 `yscmanifest` 语法高亮，覆盖项目/依赖声明、版本、Git URL 与 `h1:` 校验值。依赖获取和同步由解释器命令 `ysc mod get` / `ysc mod sync` 执行。
+
+## YScript v0.1.5.3
+
+- `package` 只声明源文件所属包；多文件包的声明文件无需单独包含 `func main()`，避免库文件和测试文件的入口误报。
+- `cli` 支持 `app.command()` 子命令、自动转换 int / float / bool、choices 与数值范围校验、互斥参数组及 `multi_option()` 重复参数列表；同步命令行参数库文档与集成测试。
+- 泛型函数与泛型结构体支持类型参数、实参/字段类型推导、内建约束（`any` / `number` / `ordered` / `comparable`）和结构化接口约束；语法高亮支持泛型声明、类型参数/实参及约束，编辑器新增泛型函数、结构体与约束代码片段。
+- `load` 新增模块生命周期接口：`load.install(path)` 安装而不执行，`load.start(path)` 执行已安装模块，`load.stop(path)` 调用可选的模块级 `stop()`，`load.uninstall(path)` 必要时先停止再移除声明。
+- `ysc doc` 支持按函数名关联任意位置的文档块：`@functionName HEAD` 到 `@functionName END` 之间的 `#` 注释会覆盖就近注释；注解标记有专用语法高亮。
 
 ## YScript v0.1.5.2
 
@@ -12,10 +24,11 @@
 - `sys` 命名空间补充跨平台进程、同步命令执行、文件句柄、内存映射、信号、CPU 特性等系统接口。
 - `io` 命名空间补充 `Reader` / `Writer` / `Closer` 契约、`Pipe`、`TeeReader`、`MultiWriter`、`SectionReader`、`Discard` / `NopCloser`、缓存流适配器与错误常量，方便流式处理与 sys 层桥接。
 - 补全缓冲流 API：Reader / Writer 的容量查询与 Reset、Peek / 回退 / 分隔读取 / 逐行读取、WriteTo / ReadFrom / Flush，合并 ReadWriter，以及支持行、词、字节、rune 分割和缓冲区配置的 Scanner。
-- 新增 `load` 命名空间补全，支持 `load.load` / `load.reload` / `load.unload` / `load.loaded` 热加载接口。
 - 更新 `package main` 入口和函数代码片段说明。
 
-热加载用法：`load.load(path)` 返回插件函数字典；源文件更新后调用 `load.reload(path)`，已有字典句柄会指向新函数；`load.unload(path)` 卸载插件。
+`load` 命名空间补全和悬停文档覆盖全部接口。生命周期方法接收 YScript 源文件路径字符串：`load.install(path)` 解析、编译并注册模块，不执行初始化或顶层代码；`load.start(path)` 执行已安装模块的初始化和顶层代码；`load.stop(path)` 调用模块可选的 `stop()` 函数；`load.uninstall(path)` 在需要时先停止模块，再移除其声明。
+
+兼容的既有热加载接口仍可使用：`load.load(path)` 加载模块并返回可调用的导出字典；源文件更新后调用 `load.reload(path)` 替换已加载模块；`load.unload(path)` 卸载模块并清空导出字典；`load.loaded()` 列出已加载路径。
 
 ---
 
@@ -23,7 +36,7 @@
 
 | 能力 | 说明 |
 |------|------|
-| 语法高亮 | 关键字、类型、内置函数、命名空间、字符串插值、Shell 反引号、bytes 字面量、注释、数字、常量、Test 表达式、**C/FFI 类型**（`struct:int32,double`、`clong`/`culong`、`ptr`/`cstring`） |
+| 语法高亮 | 关键字、类型、内置函数、命名空间、文档注解标记、字符串插值、Shell 反引号、bytes 字面量、注释、数字、常量、Test 表达式、**C/FFI 类型**（`struct:int32,double`、`clong`/`culong`、`ptr`/`cstring`） |
 | 命名空间补全 | `ns.` 之后补全该模块全部成员（含 `io` 缓冲流 / Scanner、`c.`、`ffi.`、`ocr.` 与 `load.`） |
 | **自动 import** | 检测「用了内置库却没 import」并给出警告；支持**一键快速修复**（`Ctrl+.`）与**补全联动**（输入 `binary.` 时列表首项即为「＋ 添加 import"binary"」，选中即自动写入） |
 | 智能补全 | 关键字、类型、内置函数（250+）、struct 方法（`func this.`）、warp/WaitGroup 成员、dict/list 方法、import 路径 |
@@ -32,7 +45,7 @@
 | 文档符号 | 大纲视图中显示函数、变量、类型 |
 | 诊断 | 插件内置 YScript 词法/语法检查、静态检查警告、括号未闭合、重复函数声明、顶层变量声明与函数外可执行语句检测、第三方导入函数同名冲突提示、敏感操作的 `#!permit` 权限提示；无需启动 `ysc -c` |
 | 自定义符号解析 | 当前文件和第三方库中的自定义函数、结构体方法支持补全、签名帮助、悬停和跳转定义；支持导入别名及相对路径库；同名函数候选不再按导入顺序误选 |
-| 格式化 | 缩进与空白统一 |
+| 格式化 | 右键菜单、命令面板支持“YScript: 格式化文档”，通过 `ysc fmt -t` 使用与 CLI 一致的格式化器，并仅更新编辑器缓冲区 |
 | 一键运行 | 编辑器标题栏 ▶ 按钮，通过 `ysc` 运行当前脚本 |
 | 调试 | 左侧 YScript Debug 入口和 VS Code 原生 DAP：行/函数/条件断点、日志点、单步、变量/栈查看、表达式求值与修改、未捕获异常暂停、执行跟踪及 TCP attach |
 | 代码片段 | 60+ 网安场景模板 |
@@ -43,6 +56,7 @@
 |------|------|------|------|
 | `pkgmain` | main 入口 | `ifile` | 检查文件存在 |
 | `func` / `funcr` | 函数定义 | `idir` | 检查目录存在 |
+| `genericfunc` / `genericstruct` / `genericconstraint` | 泛型函数、泛型结构体与约束 | `infer` | `name <- value` 类型推断声明 |
 | `arrow` | 箭头函数 | `defer` | defer 延迟执行 |
 | `if` / `ifelse` / `ifelif` | if 分支 | `drec` | defer+recover |
 | `forr` / `forl` / `ford` | for 循环 | `warp` / `wawait` | 并发线程 |
@@ -70,10 +84,11 @@
 - `Reload Language YScript` — 重启 YScript 语言服务器
 - `YScript: Show Output` — 打开服务器输出面板
 - `YScript: Run (ysc)` — 运行当前编辑的脚本（编辑器标题栏 ▶ 按钮）
+- `YScript: 格式化文档 (Format Document)` — 使用已配置的 `ysc` 格式化当前 `.ys` 文档
 
 ## 程序入口
 
-可执行文件使用 `package main` 和 `func main()` 作为入口。文件顶层用于包、导入、函数及类型声明；变量声明和执行语句应放入 `main()` 或其他函数中。插件语言服务器会在编辑时直接检查词法和常见语法错误，并提供自定义函数及方法的关联提示，不需要安装或启动 `ysc -c` 才能获得诊断。
+可执行文件使用 `package main` 和 `func main()` 作为入口。`package` 用于标记当前声明文件所属的包；同一包可由多个文件组成，库声明文件无需各自声明 `func main()`，导入后即可调用其函数。`func main()` 只能声明在 `package main` 中。文件顶层用于包、导入、函数及类型声明；变量声明和执行语句应放入 `main()` 或其他函数中。插件语言服务器会在编辑时直接检查词法和常见语法错误，并提供自定义函数及方法的关联提示，不需要安装或启动 `ysc -c` 才能获得诊断。
 
 ```yscript
 package main

@@ -55,6 +55,33 @@ function tokenize(source) {
         const start = i;
         const startLine = line;
         const startCol = col;
+        if (ch === '@' && source.slice(source.lastIndexOf('\n', i - 1) + 1, i).trim() === '') {
+            const lineEnd = source.indexOf('\n', i);
+            const markerLine = source.slice(i, lineEnd < 0 ? len : lineEnd).trim();
+            const markerMatch = markerLine.match(/^@\s*([A-Za-z_]\w*)\s+(HEAD|END)$/);
+            if (markerMatch) {
+                let end = lineEnd < 0 ? len : lineEnd + 1;
+                if (markerMatch[2] === 'HEAD') {
+                    const endPattern = new RegExp(`^\\s*@\\s*${markerMatch[1]}\\s+END\\s*$`, 'm');
+                    const close = endPattern.exec(source.slice(end));
+                    end = close ? end + close.index + close[0].length : len;
+                    if (end < len && source[end] === '\n')
+                        end++;
+                }
+                const annotation = source.slice(start, end);
+                push('comment', annotation, start, end, startLine, startCol);
+                const lastNewline = annotation.lastIndexOf('\n');
+                if (lastNewline >= 0) {
+                    line += (annotation.match(/\n/g) || []).length;
+                    col = annotation.length - lastNewline;
+                }
+                else {
+                    col += annotation.length;
+                }
+                i = end;
+                continue;
+            }
+        }
         // 换行
         if (ch === '\n') {
             push('whitespace', ch, start, i + 1, startLine, startCol);
