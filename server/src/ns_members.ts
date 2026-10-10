@@ -34,6 +34,7 @@ export const NS_MEMBERS: Record<string, string[]> = {
   json: ['from_file', 'parse', 'pretty_print', 'query', 'stringify', 'to_file'],
   load: ['install', 'load', 'loaded', 'reload', 'start', 'stop', 'uninstall', 'unload'],
   log: ['close', 'debug', 'error', 'flush', 'get_level', 'info', 'log', 'set_color', 'set_json', 'set_level', 'set_output', 'set_rotate', 'set_ts', 'to_json', 'warn'],
+  lstd: ['alloc', 'bind', 'buffer', 'call', 'callback', 'callback_free', 'close', 'error', 'find', 'find_ordinal', 'free', 'load', 'ptr', 'read', 'str', 'write'],
   net: ['Accept', 'CIDR', 'CIDR_contains', 'CIDR_merge', 'ConnClose', 'ConnRead', 'ConnWrite', 'DialTCP', 'DialTimeout', 'DialUDP', 'IPVersion', 'InterfaceBy', 'Interfaces', 'IsIP', 'Listen', 'LookupAddr', 'LookupHost', 'LookupMX', 'LookupNS', 'LookupPort', 'LookupSRV', 'LookupTXT', 'Nginx', 'ResolveTCP', 'ResolveUDP', 'dial', 'dial_tcp', 'dial_udp', 'listen_tcp', 'nginx', 'udp_bind', 'udp_dial'],
   ocr: ['from_file', 'get_lang', 'get_psm', 'recognize', 'set_lang', 'set_psm'],
   os: ['environ', 'exec', 'exec_shell', 'exit', 'getenv', 'getpid', 'hostname', 'kill', 'running', 'setenv', 'shell', 'shell_background', 'signal_notify', 'sleep', 'temp_dir', 'wait'],

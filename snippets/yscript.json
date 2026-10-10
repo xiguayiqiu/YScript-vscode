@@ -746,5 +746,28 @@
       "${0}"
     ],
     "description": "线程池并发任务"
+  },
+  "CUDA batch hashes": {
+    "prefix": "cudahash",
+    "body": [
+      "import [\"cuda\"]",
+      "if cuda.available() {",
+      "\tlet ${1:hashes} = cuda.${2|MD5_Batch,SHA256_Batch,SHA512_Batch,SHA256d_Batch,NTLM_Batch|}(${3:[\"value1\", \"value2\"]})",
+      "\tprintln(${1:hashes})",
+      "} else {",
+      "\tprintln(\"CUDA GPU unavailable; use the CPU implementation\")",
+      "}",
+      "${0}"
+    ],
+    "description": "CUDA 批量摘要示例；无 GPU 时需由应用选择 CPU 实现"
+  },
+  "CUDA PBKDF2": {
+    "prefix": "cudapbkdf2",
+    "body": [
+      "import [\"cuda\"]",
+      "let ${1:keys} = cuda.PBKDF2_Batch(${2:[\"password1\", \"password2\"]}, \"${3:salt}\", ${4:10000}, \"${5|sha1,sha256,sha512|}\", ${6:32})",
+      "${0}"
+    ],
+    "description": "CUDA 批量 PBKDF2；算法为 sha1、sha256 或 sha512"
   }
 }

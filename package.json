@@ -2,7 +2,7 @@
   "name": "yscript",
   "displayName": "yscript",
   "description": "YScript 语言支持：语法高亮、LSP 智能补全、悬停文档、跳转定义、代码片段（网安专用脚本语言）",
-  "version": "0.2.12",
+  "version": "0.2.13",
   "publisher": "yiqiua",
   "icon": "icon.png",
   "engines": {
