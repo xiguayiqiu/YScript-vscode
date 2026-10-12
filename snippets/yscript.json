@@ -12,6 +12,16 @@
     ],
     "description": "package main + main(args) 入口；可执行逻辑写在函数体内"
   },
+  "main function": {
+    "prefix": "main",
+    "body": [
+      "func main() {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "main 入口函数"
+  },
   "function": {
     "prefix": "func",
     "body": [
@@ -105,6 +115,36 @@
     ],
     "description": "for 循环(范围)"
   },
+  "for index": {
+    "prefix": "fori",
+    "body": [
+      "for ${1:i} in 0..${2:10} {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "for 索引循环"
+  },
+  "for c style": {
+    "prefix": "forc",
+    "body": [
+      "for ${1:i} = ${2:0}; ${1:i} < ${3:10}; ${1:i} = ${1:i} + 1 {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "C 风格 for 索引循环"
+  },
+  "for each": {
+    "prefix": "fore",
+    "body": [
+      "for ${1:item} in ${2:items} {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "遍历集合中的每一项"
+  },
   "for list": {
     "prefix": "forl",
     "body": [
@@ -165,6 +205,13 @@
       ""
     ],
     "description": "defer 延迟执行"
+  },
+  "defer close": {
+    "prefix": "deferclose",
+    "body": [
+      "defer ${1:resource}.close()"
+    ],
+    "description": "函数结束时关闭资源"
   },
   "defer recover": {
     "prefix": "drec",
@@ -303,6 +350,20 @@
     ],
     "description": "let 变量声明"
   },
+  "return": {
+    "prefix": "ret",
+    "body": [
+      "return ${0:value}"
+    ],
+    "description": "返回一个值"
+  },
+  "return empty": {
+    "prefix": "retn",
+    "body": [
+      "return"
+    ],
+    "description": "无返回值返回"
+  },
   "inferred declaration": {
     "prefix": "infer",
     "body": [
@@ -330,6 +391,56 @@
       "printf(\"${1:%s}\\\n\", ${0:args})"
     ],
     "description": "格式化输出"
+  },
+  "println": {
+    "prefix": "pln",
+    "body": [
+      "println(\"${0:message}\")"
+    ],
+    "description": "输出一行文本"
+  },
+  "if nil": {
+    "prefix": "ifnil",
+    "body": [
+      "if ${1:value} == nil {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "检查值是否为 nil"
+  },
+  "if error": {
+    "prefix": "iferr",
+    "body": [
+      "if ${1:result} is error {",
+      "\t${0}",
+      "}",
+      ""
+    ],
+    "description": "检查结果是否为 error"
+  },
+  "raise error": {
+    "prefix": "raise",
+    "body": [
+      "raise ${1:ErrorType}(\"${0:message}\")"
+    ],
+    "description": "抛出带类型的异常"
+  },
+  "catch match": {
+    "prefix": "catchmatch",
+    "body": [
+      "catch {",
+      "\t${1:risky_call()}",
+      "} match {",
+      "\t${2:ErrorType}(e) -> {",
+      "\t\t${3:println(e)}",
+      "\t},",
+      "\t_ -> {",
+      "\t\t${0:println(\"unknown error\")}",
+      "\t}",
+      "}"
+    ],
+    "description": "捕获异常并按类型分支处理"
   },
   "http get": {
     "prefix": "hget",

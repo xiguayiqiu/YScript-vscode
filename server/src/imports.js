@@ -18,10 +18,7 @@ exports.moduleForNamespace = moduleForNamespace;
 const node_1 = require("vscode-languageserver/node");
 const ns_members_1 = require("./ns_members");
 /** 运行时命名空间 -> import 时要写的模块名 */
-const NS_TO_MODULE = {};
-for (const m of Object.keys(ns_members_1.MODULE_NAMESPACE)) {
-    NS_TO_MODULE[ns_members_1.MODULE_NAMESPACE[m]] = m;
-}
+const NS_TO_MODULE = ns_members_1.NAMESPACE_MODULE;
 /** 所有内置运行时命名空间 */
 const ALL_NS = Object.keys(ns_members_1.NS_MEMBERS);
 exports.ALL_NS = ALL_NS;
@@ -129,6 +126,17 @@ function parseImports(text) {
         hasImport = true;
         let statement = m[1];
         let endLine = i;
+        if (!statement.trim()) {
+            let nextLine = endLine + 1;
+            while (nextLine < lines.length
+                && (lines[nextLine].trim() === '' || stripImportComments(lines[nextLine]).trim() === '')) {
+                nextLine++;
+            }
+            if (nextLine < lines.length && /^\s*\[/.test(lines[nextLine])) {
+                statement += `${'\n'.repeat(nextLine - endLine)}${lines[nextLine]}`;
+                endLine = nextLine;
+            }
+        }
         if (/^\s*\[/.test(statement)) {
             while (!importListIsClosed(statement) && endLine + 1 < lines.length) {
                 statement += `\n${lines[++endLine]}`;
@@ -144,8 +152,9 @@ function parseImports(text) {
         while ((g = re.exec(stripImportComments(statement))) !== null) {
             const path = g[1];
             // 本地文件路径（含 / 或以 ./ 开头）不是标准库，跳过
-            const isStdModule = ns_members_1.NS_MEMBERS[path] !== undefined || Object.prototype.hasOwnProperty.call(ns_members_1.MODULE_NAMESPACE, path);
-            if (path.includes('/') || path.startsWith('.') || !isStdModule) {
+            const moduleName = path.toLowerCase();
+            const namespace = ns_members_1.MODULE_NAMESPACE[moduleName];
+            if (path.includes('/') || path.startsWith('.') || !namespace) {
                 projectPaths.add(path);
                 if (g[2]) {
                     const alias = /\bas\s+(\w+)/.exec(g[2])?.[1];
@@ -154,8 +163,8 @@ function parseImports(text) {
                 }
                 continue;
             }
-            modules.add(path);
-            namespaces.add(ns_members_1.MODULE_NAMESPACE[path] || path);
+            modules.add(ns_members_1.MODULE_CANONICAL[moduleName] || moduleName);
+            namespaces.add(namespace);
         }
     }
     return { modules, namespaces, projectPaths, projectAliases, lastImportLine, hasImport };
@@ -306,21 +315,35 @@ function buildImportEdit(text, info, modules) {
     // 情况 1：已有列表形式 import [...]
     const listRe = /^\s*import\s*\[/;
     let listLine = -1;
+    let openLine = -1;
     for (let i = 0; i < lines.length; i++) {
         if (listRe.test(lines[i])) {
             listLine = i;
+            openLine = i;
+            break;
+        }
+        if (!/^\s*import\b\s*$/.test(lines[i]))
+            continue;
+        let nextLine = i + 1;
+        while (nextLine < lines.length
+            && (lines[nextLine].trim() === '' || stripImportComments(lines[nextLine]).trim() === '')) {
+            nextLine++;
+        }
+        if (nextLine < lines.length && /^\s*\[/.test(lines[nextLine])) {
+            listLine = i;
+            openLine = nextLine;
             break;
         }
     }
     if (listLine >= 0) {
         // 找到该 import 语句的结束行（] 所在行）与 ] 的列位置
-        let closeLine = listLine;
+        let closeLine = openLine;
         while (closeLine < lines.length && !/\]/.test(lines[closeLine]))
             closeLine++;
         const closeCol = lines[closeLine].indexOf(']');
         // 缩进推断：优先用列表内已有项的缩进；空列表则用 import 行的缩进 + 一个 tab
         let indent = '';
-        for (let i = listLine + 1; i < closeLine; i++) {
+        for (let i = openLine + 1; i < closeLine; i++) {
             const m = /^(\s+)"/.exec(lines[i]);
             if (m) {
                 indent = m[1];
@@ -328,11 +351,11 @@ function buildImportEdit(text, info, modules) {
             }
         }
         if (!indent) {
-            const base = (lines[listLine].match(/^\s*/) || [''])[0] || '';
+            const base = (lines[openLine].match(/^\s*/) || [''])[0] || '';
             indent = base + '\t';
         }
         const body = need.map((m) => `${indent}"${m}"`).join(',\n');
-        if (closeCol > 0) {
+        if (closeCol > 0 && lines[closeLine].slice(0, closeCol).trim().length > 0) {
             // ] 与内容同行，如 import ["json"] —— 单行风格用空格分隔，不套多行缩进
             const head = lines[closeLine].slice(0, closeCol).trimEnd();
             const sep = head.length > 0 && !head.endsWith(',') ? ', ' : '';
@@ -369,9 +392,9 @@ function buildImportEdit(text, info, modules) {
             break;
         }
     }
-    const items = need.map((m) => `import "${m}"`).join('\n');
+    const items = `import [${need.map((m) => `"${m}"`).join(', ')}]`;
     const at = Math.min(insertLine, lines.length);
-    return [node_1.TextEdit.insert({ line: at, character: 0 }, items + '\n')];
+    return [node_1.TextEdit.insert({ line: at, character: 0 }, `${items}\n`)];
 }
 /**
  * 运行时命名空间 -> import 时要写的模块名。
@@ -379,6 +402,6 @@ function buildImportEdit(text, info, modules) {
  * 例：strings.ToUpper 未导入时，应提示 import ["string"]（不是 "strings"）。
  */
 function moduleForNamespace(ns) {
-    return NS_TO_MODULE[ns] || ns;
+    return NS_TO_MODULE[ns] || (ns.startsWith('term.') ? 'term' : ns);
 }
 //# sourceMappingURL=imports.js.map

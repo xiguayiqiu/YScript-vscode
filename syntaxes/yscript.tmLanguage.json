@@ -621,7 +621,7 @@
         },
         {
           "name": "variable.other.namespace.yscript",
-          "match": "\\b(?:aes|array|binary|c|color|compress|crypto|csv|cuda|encoding|errors|ffi|from|http|ini|io|iter|json|load|log|net|os|path|rand|raw|reflect|regex|rsa|socket|ssl|stdio|string|strings|sync|sys|thread|time|toml|url|xml|yaml)\\.(?=[A-Za-z_])"
+          "match": "\\b(?:aes|array|binary|c|color|compress|crypto|csv|cuda|encoding|errors|event|ffi|from|http|ini|io|iter|json|load|log|net|os|path|rand|raw|reflect|regex|rsa|socket|ssl|stdio|string|strings|sync|sys|thread|time|toml|url|xml|yaml)\\.(?=[A-Za-z_])"
         },
         {
           "name": "entity.name.function.yscript",

@@ -78,14 +78,31 @@ function importPathAtOffset(text, offset) {
                     depth++;
                 else if (token.value === ']')
                     depth--;
-                else if (depth > 0 && token.type === 'string' && offset >= token.start && offset <= token.end) {
-                    return decodeStringToken(token.value);
+                else if (depth > 0 && token.type === 'string') {
+                    if (offset >= token.start && offset <= token.end) {
+                        return decodeStringToken(token.value);
+                    }
+                    const aliasKeyword = tokens[tokenIndex + 1];
+                    const aliasToken = tokens[tokenIndex + 2];
+                    if (aliasKeyword?.value === 'as'
+                        && aliasToken
+                        && offset >= aliasToken.start
+                        && offset <= aliasToken.end) {
+                        return decodeStringToken(token.value);
+                    }
                 }
             }
             continue;
         }
         const token = tokens[tokenIndex];
         if (token?.type === 'string' && offset >= token.start && offset <= token.end) {
+            return decodeStringToken(token.value);
+        }
+        if (token?.type === 'string'
+            && tokens[tokenIndex + 1]?.value === 'as'
+            && tokens[tokenIndex + 2]
+            && offset >= tokens[tokenIndex + 2].start
+            && offset <= tokens[tokenIndex + 2].end) {
             return decodeStringToken(token.value);
         }
     }

@@ -4,8 +4,10 @@
  * ⚠ 请勿手工编辑：改了 internal/std/*.go 后重新生成即可。
  *
  * 覆盖来源：
- *   1. MakeNS("ns", map[string]value.BuiltinFunc{...})  各命名空间注册表
- *   2. buildCFuncNames()                                c 模块（动态组装）
+ *   1. MakeNS(...) / grouped term namespace               各命名空间注册表
+ *   2. Builtins()                                        ffi 模块（动态组装）
+ *   3. buildCFuncNames()                                c 模块（动态组装）
+ *   4. internal/std/catalog/catalog.go                  可导入模块名、命名空间与别名
  *
  * 重新生成：
  *   cd yscript && python3 tools/gen_ns_members.py > ../vscode/server/src/ns_members.ts
@@ -26,10 +28,12 @@ export const NS_MEMBERS: Record<string, string[]> = {
   cuda: ['Device_Info', 'HMAC_SHA1_Batch', 'HMAC_SHA256_Batch', 'HMAC_SHA512_Batch', 'MD4_Batch', 'MD5_Batch', 'NTLM_Batch', 'PBKDF2_Batch', 'SHA256_Batch', 'SHA256d_Batch', 'SHA512_Batch', 'Set_Device', 'Sync', 'WPA2_PMK_Batch', 'available', 'device_count', 'device_memory', 'device_name'],
   encoding: ['base64_decode', 'base64_encode', 'hex_decode', 'hex_encode', 'html_decode', 'html_encode', 'url_decode', 'url_encode'],
   errors: ['cause', 'format', 'is', 'new', 'new_with_code', 'with_type', 'wrap'],
+  event: ['wait'],
+  ffi: ['alloc', 'bind', 'call', 'close', 'find', 'find_ordinal', 'free', 'open', 'read', 'str', 'write'],
   from: ['Appendf', 'Errorf', 'Formats', 'Fprintf', 'Fscanf', 'Print', 'Println', 'Scan', 'Scanf', 'Scanln', 'Sprintf', 'Sscanf'],
   http: ['BasicAuth', 'Body', 'ClearCookies', 'ClearHeaders', 'Cookie', 'Cookies', 'Delete', 'Do', 'Download', 'Dump', 'Form', 'Get', 'Head', 'Headers', 'Insecure', 'Json', 'LastError', 'Ok', 'Options', 'Patch', 'Post', 'Put', 'Query', 'Raw', 'Request', 'Reset', 'Server', 'Session', 'SetAfterResponse', 'SetCookie', 'SetHeader', 'SetMaxBody', 'SetProxy', 'SetRaise', 'SetRedirects', 'SetRetries', 'SetRetryBackoff', 'SetRetryDelay', 'SetTimeout', 'SetUserAgent', 'StatusCode', 'StatusText', 'Upload'],
   ini: ['from_file', 'parse'],
-  io: ['Available', 'Buffered', 'Bytes', 'Close', 'Copy', 'Discard', 'EOF', 'ErrBufferFull', 'ErrClosed', 'ErrFinalToken', 'ErrInvalidUnreadByte', 'ErrInvalidUnreadRune', 'ErrNegativeCount', 'ErrNoProgress', 'ErrSeekUnsupported', 'ErrShortBuffer', 'ErrTooLarge', 'ErrUnexpectedEOF', 'Flush', 'LimitReader', 'MultiReader', 'MultiWriter', 'NewBufferedReadWriter', 'NewBufferedReader', 'NewBufferedWriter', 'NewReadWriter', 'NewReader', 'NewScanner', 'NewWriter', 'NopCloser', 'Peek', 'Pipe', 'Read', 'ReadAll', 'ReadByte', 'ReadBytes', 'ReadFrom', 'ReadLine', 'ReadRune', 'ReadSlice', 'ReadString', 'ReaderBuffered', 'ReaderDiscard', 'ReaderReset', 'ReaderSize', 'ReaderWriteTo', 'ScanBytes', 'ScanLines', 'ScanRunes', 'ScanWords', 'ScannerBuffer', 'ScannerBytes', 'ScannerErr', 'ScannerScan', 'ScannerSplit', 'ScannerText', 'SectionReader', 'Skip', 'Stderr', 'Stdin', 'Stdout', 'String', 'TeeReader', 'UnreadByte', 'UnreadRune', 'Write', 'WriteByte', 'WriteRune', 'WriteString', 'WriterBuffered', 'WriterReset', 'WriterSize', 'append_file', 'chmod', 'chown', 'close', 'copy', 'create', 'file_exists', 'file_info', 'file_mode', 'file_mtime', 'file_size', 'glob', 'hardlink', 'http_get', 'http_post', 'http_request', 'is_dir', 'is_file', 'is_symlink', 'lock', 'mkdir', 'mkdir_all', 'open', 'read', 'read_bytes', 'read_dir', 'read_file', 'read_lines', 'read_with', 'read_with_size', 'readlink', 'realpath', 'remove', 'remove_all', 'rename', 'stderr', 'stdin', 'stdout', 'symlink', 'temp_dir', 'temp_file', 'unlock', 'walk', 'which', 'write_bytes', 'write_file'],
+  io: ['Available', 'Buffered', 'Bytes', 'Close', 'Copy', 'Discard', 'EOF', 'ErrBufferFull', 'ErrClosed', 'ErrFinalToken', 'ErrInvalidUnreadByte', 'ErrInvalidUnreadRune', 'ErrNegativeCount', 'ErrNoProgress', 'ErrSeekUnsupported', 'ErrShortBuffer', 'ErrTooLarge', 'ErrUnexpectedEOF', 'Flush', 'LimitReader', 'MultiReader', 'MultiWriter', 'NewBufferedReadWriter', 'NewBufferedReader', 'NewBufferedWriter', 'NewReadWriter', 'NewReader', 'NewScanner', 'NewWriter', 'NopCloser', 'OpenFile', 'Peek', 'Pipe', 'Read', 'ReadAll', 'ReadByte', 'ReadBytes', 'ReadFrom', 'ReadLine', 'ReadRune', 'ReadSlice', 'ReadString', 'ReaderBuffered', 'ReaderDiscard', 'ReaderReset', 'ReaderSize', 'ReaderWriteTo', 'ScanBytes', 'ScanLines', 'ScanRunes', 'ScanWords', 'ScannerBuffer', 'ScannerBytes', 'ScannerErr', 'ScannerScan', 'ScannerSplit', 'ScannerText', 'SectionReader', 'Seek', 'Skip', 'Stderr', 'Stdin', 'Stdout', 'String', 'TeeReader', 'UnreadByte', 'UnreadRune', 'Write', 'WriteByte', 'WriteRune', 'WriteString', 'WriterBuffered', 'WriterReset', 'WriterSize', 'append_file', 'chmod', 'chown', 'close', 'copy', 'create', 'file_exists', 'file_info', 'file_mode', 'file_mtime', 'file_size', 'glob', 'hardlink', 'http_get', 'http_post', 'http_request', 'is_dir', 'is_file', 'is_symlink', 'lock', 'mkdir', 'mkdir_all', 'open', 'open_file', 'read', 'read_bytes', 'read_dir', 'read_file', 'read_lines', 'read_with', 'read_with_size', 'readlink', 'realpath', 'remove', 'remove_all', 'rename', 'stderr', 'stdin', 'stdout', 'symlink', 'temp_dir', 'temp_file', 'unlock', 'walk', 'which', 'write_bytes', 'write_file'],
   iter: ['bytes', 'chain', 'filter', 'items', 'lines', 'map', 'take'],
   json: ['from_file', 'parse', 'pretty_print', 'query', 'stringify', 'to_file'],
   load: ['install', 'load', 'loaded', 'reload', 'start', 'stop', 'uninstall', 'unload'],
@@ -50,6 +54,16 @@ export const NS_MEMBERS: Record<string, string[]> = {
   strings: ['Capitalize', 'Compare', 'Contains', 'Count', 'EqualFold', 'FromRunes', 'HasPrefix', 'HasSuffix', 'Index', 'IsBlank', 'IsControl', 'IsDigit', 'IsLetter', 'IsSpace', 'Join', 'LastIndex', 'Repeat', 'Replace', 'ReplaceN', 'RuneCount', 'Runes', 'Split', 'SplitN', 'ToLower', 'ToRunes', 'ToUpper', 'Trim', 'TrimLeft', 'TrimRight', 'TrimSpace'],
   sync: ['Atomic', 'Chan', 'Cond', 'Mutex', 'Once', 'RWMutex', 'Semaphore', 'TLS', 'WaitGroup', 'WorkerPool', 'case', 'default', 'select'],
   sys: ['cpu_features', 'cpu_info', 'current_user', 'cwd', 'default_gateway', 'disk_info', 'exec', 'file_close', 'file_descriptor', 'file_open', 'file_read', 'file_seek', 'file_stat', 'file_sync', 'file_truncate', 'file_write', 'find_process', 'hostname', 'identity_drop', 'is_executable', 'is_linux', 'is_readable', 'is_root', 'is_windows', 'is_writable', 'kill_process', 'mem_info', 'memory_flush', 'memory_lock', 'memory_map', 'memory_protect', 'memory_read', 'memory_unlock', 'memory_unmap', 'memory_write', 'net_interfaces', 'os_info', 'pipe', 'primary_mac', 'process_children', 'process_info', 'process_list', 'process_replace', 'process_start', 'process_wait', 'service_restart', 'service_start', 'service_status', 'service_stop', 'signal_close', 'signal_send', 'signal_subscribe', 'signal_wait', 'uptime', 'user_groups'],
+  term: ['ansi', 'ansi_clear', 'ansi_csi', 'ansi_mouse', 'ansi_move', 'ansi_parse', 'ansi_sgr', 'cap', 'cap_color_mode', 'cap_detect', 'cap_supports', 'cap_termcap', 'cap_terminfo', 'env', 'env_is_piped', 'env_is_tty', 'env_snapshot', 'input', 'input_parse', 'input_parse_chunk', 'io', 'io_mode', 'io_restore', 'io_save', 'io_set_echo', 'output', 'output_diff', 'output_flush', 'output_grid', 'output_render', 'output_set', 'output_sync', 'screen', 'screen_alt_screen', 'screen_clear', 'screen_clear_line', 'screen_hide_cursor', 'screen_mouse', 'screen_move', 'screen_resize_count', 'screen_show_cursor', 'screen_size', 'screen_stop_resize_watch', 'screen_watch_resize', 'style', 'style_apply', 'style_bg', 'style_color256', 'style_fg', 'style_reset', 'style_sgr', 'text', 'text_ansi_width', 'text_truncate', 'text_width', 'text_wrap'],
+  'term.ansi': ['clear', 'csi', 'mouse', 'move', 'parse', 'sgr'],
+  'term.cap': ['color_mode', 'detect', 'supports', 'termcap', 'terminfo'],
+  'term.env': ['is_piped', 'is_tty', 'snapshot'],
+  'term.input': ['parse', 'parse_chunk'],
+  'term.io': ['mode', 'restore', 'save', 'set_echo'],
+  'term.output': ['diff', 'flush', 'grid', 'render', 'set', 'sync'],
+  'term.screen': ['alt_screen', 'clear', 'clear_line', 'hide_cursor', 'mouse', 'move', 'resize_count', 'show_cursor', 'size', 'stop_resize_watch', 'watch_resize'],
+  'term.style': ['apply', 'bg', 'color256', 'fg', 'reset', 'sgr'],
+  'term.text': ['ansi_width', 'truncate', 'width', 'wrap'],
   thread: ['parent', 'self', 'sigstop'],
   time: ['DAY', 'HOUR', 'MILLISECOND', 'MINUTE', 'RFC3339', 'SECOND', 'add', 'after', 'after_chan', 'day', 'days_between', 'diff_days', 'duration', 'format', 'from_unix', 'in_tz', 'local', 'millisecond', 'month', 'new_ticker', 'new_timer', 'now', 'now_ms', 'now_ns', 'now_us', 'parse', 'second', 'sub', 'timestamp', 'tz_offset', 'utc', 'year'],
   toml: ['from_file', 'parse'],
@@ -59,20 +73,169 @@ export const NS_MEMBERS: Record<string, string[]> = {
 };
 
 /** 全部命名空间（判断 `xxx.` 是否为库调用时用） */
-export const ALL_NAMESPACES: string[] = Object.keys(NS_MEMBERS);
+export const ALL_NAMESPACES: string[] = Object.keys(NS_MEMBERS).filter((name) => !name.includes('.'));
 
-/**
- * import 名 -> 运行时命名空间名。
- *
- * 历史遗留：`import "string"` 之后用的是 `strings.xxx`（多一个 s），
- * `error` 的命名空间名是 `errors`。
- */
+/** 所有可导入标准库名称（包括别名） -> 运行时命名空间 */
 export const MODULE_NAMESPACE: Record<string, string> = {
-  string: 'strings',
-  error: 'errors',
+  'aes': 'aes',
+  'array': 'array',
+  'binary': 'binary',
+  'c': 'c',
+  'cli': 'cli',
+  'color': 'color',
+  'compress': 'compress',
+  'crypto': 'crypto',
+  'csv': 'csv',
+  'cuda': 'cuda',
+  'encoding': 'encoding',
+  'errors': 'errors',
+  'event': 'event',
+  'ffi': 'ffi',
+  'from': 'from',
+  'http': 'http',
+  'ini': 'ini',
+  'io': 'io',
+  'iter': 'iter',
+  'json': 'json',
+  'load': 'load',
+  'log': 'log',
+  'lstd': 'lstd',
+  'net': 'net',
+  'ocr': 'ocr',
+  'os': 'os',
+  'path': 'path',
+  'rand': 'rand',
+  'random': 'rand',
+  'raw': 'raw',
+  'reflect': 'reflect',
+  'regex': 'regex',
+  'rsa': 'rsa',
+  'socket': 'socket',
+  'ssl': 'ssl',
+  'stdio': 'stdio',
+  'string': 'strings',
+  'strings': 'strings',
+  'str': 'strings',
+  'sync': 'sync',
+  'sys': 'sys',
+  'term': 'term',
+  'thread': 'thread',
+  'warp': 'thread',
+  'time': 'time',
+  'toml': 'toml',
+  'url': 'url',
+  'xml': 'xml',
+  'yaml': 'yaml',
 };
+
+/** 标准库名称（含别名） -> 规范模块名 */
+export const MODULE_CANONICAL: Record<string, string> = {
+  'aes': 'aes',
+  'array': 'array',
+  'binary': 'binary',
+  'c': 'c',
+  'cli': 'cli',
+  'color': 'color',
+  'compress': 'compress',
+  'crypto': 'crypto',
+  'csv': 'csv',
+  'cuda': 'cuda',
+  'encoding': 'encoding',
+  'errors': 'errors',
+  'event': 'event',
+  'ffi': 'ffi',
+  'from': 'from',
+  'http': 'http',
+  'ini': 'ini',
+  'io': 'io',
+  'iter': 'iter',
+  'json': 'json',
+  'load': 'load',
+  'log': 'log',
+  'lstd': 'lstd',
+  'net': 'net',
+  'ocr': 'ocr',
+  'os': 'os',
+  'path': 'path',
+  'rand': 'rand',
+  'random': 'rand',
+  'raw': 'raw',
+  'reflect': 'reflect',
+  'regex': 'regex',
+  'rsa': 'rsa',
+  'socket': 'socket',
+  'ssl': 'ssl',
+  'stdio': 'stdio',
+  'string': 'string',
+  'strings': 'string',
+  'str': 'string',
+  'sync': 'sync',
+  'sys': 'sys',
+  'term': 'term',
+  'thread': 'thread',
+  'warp': 'thread',
+  'time': 'time',
+  'toml': 'toml',
+  'url': 'url',
+  'xml': 'xml',
+  'yaml': 'yaml',
+};
+
+/** 运行时命名空间 -> 自动导入时使用的规范模块名 */
+export const NAMESPACE_MODULE: Record<string, string> = {
+  'aes': 'aes',
+  'array': 'array',
+  'binary': 'binary',
+  'c': 'c',
+  'cli': 'cli',
+  'color': 'color',
+  'compress': 'compress',
+  'crypto': 'crypto',
+  'csv': 'csv',
+  'cuda': 'cuda',
+  'encoding': 'encoding',
+  'errors': 'errors',
+  'event': 'event',
+  'ffi': 'ffi',
+  'from': 'from',
+  'http': 'http',
+  'ini': 'ini',
+  'io': 'io',
+  'iter': 'iter',
+  'json': 'json',
+  'load': 'load',
+  'log': 'log',
+  'lstd': 'lstd',
+  'net': 'net',
+  'ocr': 'ocr',
+  'os': 'os',
+  'path': 'path',
+  'rand': 'rand',
+  'raw': 'raw',
+  'reflect': 'reflect',
+  'regex': 'regex',
+  'rsa': 'rsa',
+  'socket': 'socket',
+  'ssl': 'ssl',
+  'stdio': 'stdio',
+  'strings': 'string',
+  'sync': 'sync',
+  'sys': 'sys',
+  'term': 'term',
+  'thread': 'thread',
+  'time': 'time',
+  'toml': 'toml',
+  'url': 'url',
+  'xml': 'xml',
+  'yaml': 'yaml',
+};
+
+/** 判断名称是否为标准库模块名或 catalog 别名 */
+export function isStdModule(module: string): boolean {
+  return Object.prototype.hasOwnProperty.call(MODULE_NAMESPACE, module.toLowerCase());
+}
 
 /** 解析 import 名对应的运行时命名空间 */
 export function resolveNamespace(module: string): string {
-  return MODULE_NAMESPACE[module] || module;
+  return MODULE_NAMESPACE[module.toLowerCase()] || module;
 }

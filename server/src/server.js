@@ -51,9 +51,29 @@ const imports_1 = require("./imports");
 const connection = (0, node_1.createConnection)();
 const documents = new node_1.TextDocuments(vscode_languageserver_textdocument_1.TextDocument);
 const ALL_COMPLETIONS = (0, keywords_1.buildAllCompletions)();
+const TERM_GROUPS = new Set(['env', 'cap', 'io', 'input', 'screen', 'output', 'style', 'text', 'ansi']);
 const HOVER_INDEX = new Map();
 for (const m of ALL_COMPLETIONS) {
     HOVER_INDEX.set(m.label, m);
+}
+for (const [namespace, members] of Object.entries(ns_members_1.NS_MEMBERS)) {
+    for (const name of members) {
+        const label = `${namespace}.${name}`;
+        const existing = HOVER_INDEX.get(label);
+        if (existing) {
+            existing.signature ?? (existing.signature = keywords_1.STDLIB_SIGNATURES[label]);
+            continue;
+        }
+        const signature = keywords_1.STDLIB_SIGNATURES[label] ?? `${label}(...args)`;
+        HOVER_INDEX.set(label, {
+            label,
+            kind: 'builtin',
+            detail: `${namespace} 标准库函数`,
+            signature,
+            documentation: `调用形式：\`${signature}\`。\n\n` +
+                `更多示例及参数说明请查看 [YScript 标准库函数速查表](https://github.com/xiguayiqiu/YScript/wiki/函数速查表)。`,
+        });
+    }
 }
 // TYPE_MEMBERS 是扁平数组，按 of（所属类型）分组，便于成员补全查找
 const TYPE_MEMBERS_BY_TYPE = new Map();
@@ -70,7 +90,7 @@ connection.onInitialize((_params) => {
             hoverProvider: true,
             completionProvider: {
                 resolveProvider: true,
-                triggerCharacters: ['.', ':', ' ', '"', '`', '/', '#', '!'],
+                triggerCharacters: ['.', ':', ' ', '"', '`', '/', '#', '!', '_', ...'abcdefghijklmnopqrstuvwxyz'],
             },
             definitionProvider: true,
             codeActionProvider: true,
@@ -327,6 +347,7 @@ function analyzeDocument(doc) {
             funcs.set(owner ? `${owner}.${name}` : name, {
                 name,
                 params,
+                documentation: extractNamedFunctionDocumentation(text, name),
                 methodOwner: owner,
                 uri: doc.uri,
                 declLine: nameToken.line - 1,
@@ -394,6 +415,29 @@ function analyzeDocument(doc) {
         }
     }
     return { symbols, scopes, funcs, varTypes };
+}
+function extractNamedFunctionDocumentation(source, name) {
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const lines = source.split('\n');
+    const startPattern = new RegExp(`^\\s*@${escapedName}\\s+HEAD\\s*$`);
+    const endPattern = new RegExp(`^\\s*@${escapedName}\\s+END\\s*$`);
+    const start = lines.findIndex((line) => startPattern.test(line));
+    if (start < 0)
+        return undefined;
+    const end = lines.findIndex((line, index) => index > start && endPattern.test(line));
+    if (end < 0)
+        return undefined;
+    const documentation = lines
+        .slice(start + 1, end)
+        .map((line) => line.replace(/^\s*# ?/, '').trimEnd())
+        .join('\n')
+        .trim();
+    return documentation || undefined;
+}
+function formatFunctionDocumentation(func, kind) {
+    const signature = `func ${func.methodOwner ? 'this.' : ''}${func.name}(${func.params.join(', ')})`;
+    return `**${func.name}** _(${kind})_\n\n\`\`\`yscript\n${signature}\n\`\`\`` +
+        (func.documentation ? `\n\n${func.documentation}` : '');
 }
 function matchingTokenIndex(tokens, start, open, close) {
     let depth = 0;
@@ -632,7 +676,7 @@ function validate(doc) {
         if (tokens[i].value !== 'import' || tokens[i + 1]?.type !== 'string')
             continue;
         const path = tokens[i + 1].value.slice(1, -1).replace(/\\(["'\\])/g, '$1');
-        if (ns_members_1.ALL_NAMESPACES.includes(path) || Object.prototype.hasOwnProperty.call(ns_members_1.MODULE_NAMESPACE, path))
+        if (ns_members_1.ALL_NAMESPACES.includes(path.toLowerCase()) || (0, ns_members_1.isStdModule)(path))
             continue;
         invalidShorthandPaths.add(path);
         out.push({
@@ -780,10 +824,60 @@ connection.onCodeAction((params) => {
     }
     return actions;
 });
+const pendingAutomaticImports = new Map();
+const automaticImportsInProgress = new Set();
+async function applyAutomaticImports(doc) {
+    const text = doc.getText();
+    const info = (0, imports_1.parseImports)(text);
+    const modules = [...new Set((0, imports_1.findUnimportedUses)(text, info).map((use) => use.module))];
+    const edits = (0, imports_1.buildImportEdit)(text, info, modules);
+    if (edits.length === 0)
+        return;
+    const result = await connection.workspace.applyEdit({
+        label: '自动导入标准库',
+        edit: {
+            documentChanges: [{
+                    textDocument: { uri: doc.uri, version: doc.version },
+                    edits,
+                }],
+        },
+    });
+    if (!result.applied && documents.get(doc.uri)?.version === doc.version) {
+        connection.console.warn(`无法为 ${doc.uri} 自动添加 import: ${result.failureReason ?? '工作区编辑未应用'}`);
+    }
+}
+function queueAutomaticImports(doc) {
+    const uri = doc.uri;
+    pendingAutomaticImports.set(uri, doc);
+    if (automaticImportsInProgress.has(uri))
+        return;
+    automaticImportsInProgress.add(uri);
+    void (async () => {
+        try {
+            while (pendingAutomaticImports.has(uri)) {
+                const latest = pendingAutomaticImports.get(uri);
+                pendingAutomaticImports.delete(uri);
+                await applyAutomaticImports(latest);
+            }
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            connection.console.error(`自动添加标准库 import 失败 (${uri}): ${message}`);
+        }
+        finally {
+            automaticImportsInProgress.delete(uri);
+            const latest = pendingAutomaticImports.get(uri);
+            if (latest)
+                queueAutomaticImports(latest);
+        }
+    })();
+}
 documents.onDidChangeContent((change) => {
     void connection.sendDiagnostics({ uri: change.document.uri, diagnostics: validate(change.document) });
+    queueAutomaticImports(change.document);
 });
 documents.onDidClose((e) => {
+    pendingAutomaticImports.delete(e.document.uri);
     void connection.sendDiagnostics({ uri: e.document.uri, diagnostics: [] });
 });
 connection.onRequest('yscript/checkDocument', (params) => {
@@ -808,16 +902,36 @@ connection.onHover(({ textDocument, position }) => {
     if (meta) {
         return { contents: { kind: node_1.MarkupKind.Markdown, value: (0, keywords_1.buildHoverDoc)(meta) } };
     }
+    const memberReceiver = /([A-Za-z_][A-Za-z0-9_.]*)\s*\.\s*$/.exec(text.slice(0, wordStart))?.[1];
+    if (memberReceiver && ns_members_1.NS_MEMBERS[memberReceiver]) {
+        const memberMeta = HOVER_INDEX.get(`${memberReceiver}.${word}`);
+        if (memberMeta) {
+            return {
+                contents: { kind: node_1.MarkupKind.Markdown, value: (0, keywords_1.buildHoverDoc)(memberMeta) },
+            };
+        }
+    }
+    const aliasedImport = memberReceiver
+        ? findAliasedImportedFunction(text, memberReceiver, word, doc.uri)
+        : undefined;
+    if (aliasedImport) {
+        return {
+            contents: {
+                kind: node_1.MarkupKind.Markdown,
+                value: formatFunctionDocumentation(aliasedImport, '第三方函数'),
+            },
+        };
+    }
     // 用户定义
     const { funcs, varTypes, symbols } = analyzeDocument(doc);
-    const memberReceiver = /([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*$/.exec(text.slice(0, wordStart));
-    if (memberReceiver) {
-        const method = findMethodForReceiver(text, memberReceiver[1], word, funcs, varTypes, doc.uri, currentMethodOwner(funcs, position.line));
+    const localMemberReceiver = /([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*$/.exec(text.slice(0, wordStart));
+    if (localMemberReceiver) {
+        const method = findMethodForReceiver(text, localMemberReceiver[1], word, funcs, varTypes, doc.uri, currentMethodOwner(funcs, position.line));
         if (method) {
             return {
                 contents: {
                     kind: node_1.MarkupKind.Markdown,
-                    value: `**${word}** _(方法)_\n\n\`\`\`yscript\nfunc this.${word}(${method.params.join(', ')})\n\`\`\``,
+                    value: formatFunctionDocumentation(method, '方法'),
                 },
             };
         }
@@ -841,7 +955,7 @@ connection.onHover(({ textDocument, position }) => {
             return {
                 contents: {
                     kind: node_1.MarkupKind.Markdown,
-                    value: `**${word}** _(函数)_\n\n\`\`\`yscript\nfunc ${word}(${f.params.join(', ')})\n\`\`\``,
+                    value: formatFunctionDocumentation(f, '函数'),
                 },
             };
         }
@@ -851,7 +965,7 @@ connection.onHover(({ textDocument, position }) => {
         return {
             contents: {
                 kind: node_1.MarkupKind.Markdown,
-                value: `**${word}** _(第三方函数)_\n\n\`\`\`yscript\nfunc ${word}(${imported.params.join(', ')})\n\`\`\``,
+                value: formatFunctionDocumentation(imported, '第三方函数'),
             },
         };
     }
@@ -894,6 +1008,35 @@ connection.onCompletion((params) => {
     if (prevChar === '.') {
         return getMemberCompletions(doc, text, offset - 1);
     }
+    const currentWordStart = getWordStart(text, offset);
+    const typedNamespace = /([A-Za-z_][A-Za-z0-9_.]*)\.$/.exec(text.slice(0, currentWordStart))?.[1];
+    if (typedNamespace && ns_members_1.NS_MEMBERS[typedNamespace]) {
+        return getMemberCompletions(doc, text, currentWordStart - 1);
+    }
+    // 命名空间名输入完成时先展示成员，选择后补上 `.member()`。
+    if (ns_members_1.NS_MEMBERS[prefix]) {
+        const importInfo = (0, imports_1.parseImports)(text);
+        const module = (0, imports_1.moduleForNamespace)(prefix);
+        const additionalTextEdits = importInfo.modules.has(module)
+            ? undefined
+            : (0, imports_1.buildImportEdit)(text, importInfo, [module]);
+        return ns_members_1.NS_MEMBERS[prefix].map((name) => {
+            const label = `${prefix}.${name}`;
+            const meta = HOVER_INDEX.get(label);
+            const isGroup = prefix === 'term' && TERM_GROUPS.has(name);
+            return {
+                label,
+                kind: isGroup ? node_1.CompletionItemKind.Module : node_1.CompletionItemKind.Function,
+                detail: meta?.detail ?? `${prefix} 模块成员`,
+                documentation: meta
+                    ? { kind: node_1.MarkupKind.Markdown, value: (0, keywords_1.buildHoverDoc)(meta) }
+                    : undefined,
+                textEdit: node_1.TextEdit.insert(position, isGroup ? `.${name}.` : `.${name}(\${0})`),
+                insertTextFormat: isGroup ? node_1.InsertTextFormat.PlainText : node_1.InsertTextFormat.Snippet,
+                additionalTextEdits,
+            };
+        });
+    }
     // 2. import 后的路径：补全内置模块名
     const beforeImport = text.slice(Math.max(0, offset - 50), offset);
     if (/(?:^|\n)\s*import\s+["']?[^"']*$/.test(beforeImport)) {
@@ -902,7 +1045,7 @@ connection.onCompletion((params) => {
             ...new Set([...ns_members_1.ALL_NAMESPACES, ...Object.keys(ns_members_1.MODULE_NAMESPACE)]),
         ].sort();
         if (quoted) {
-            // 引号内：给模块名（含别名映射，string→strings、error→errors）
+            // 引号内：给标准库 catalog 中声明的模块名和别名
             return mods.map((m) => ({
                 label: m,
                 kind: node_1.CompletionItemKind.Module,
@@ -973,6 +1116,11 @@ connection.onCompletion((params) => {
             label: func.name,
             kind: node_1.CompletionItemKind.Function,
             detail: `第三方函数: ${func.name}(${func.params.join(', ')})`,
+            documentation: func.documentation
+                ? { kind: node_1.MarkupKind.Markdown, value: formatFunctionDocumentation(func, '第三方函数') }
+                : undefined,
+            insertText: functionCallSnippet(func.name, func.params),
+            insertTextFormat: node_1.InsertTextFormat.Snippet,
         });
     }
     // 函数参数名（仅当在函数体内）
@@ -1032,7 +1180,7 @@ function getPermissionDirectiveCompletions(text, position, offset) {
 function getMemberCompletions(doc, text, dotOffset) {
     // 向左扫描一个标识符
     let i = dotOffset - 1;
-    while (i >= 0 && isIdentChar(text[i]))
+    while (i >= 0 && (isIdentChar(text[i]) || text[i] === '.'))
         i--;
     const nameStart = i + 1;
     const receiver = text.slice(nameStart, dotOffset);
@@ -1049,7 +1197,12 @@ function getMemberCompletions(doc, text, dotOffset) {
             label: func.name,
             kind: node_1.CompletionItemKind.Function,
             detail: `第三方库 ${receiver} 函数`,
-            documentation: `func ${func.name}(${func.params.join(', ')})`,
+            documentation: {
+                kind: node_1.MarkupKind.Markdown,
+                value: formatFunctionDocumentation(func, '第三方函数'),
+            },
+            insertText: functionCallSnippet(func.name, func.params),
+            insertTextFormat: node_1.InsertTextFormat.Snippet,
         }));
     }
     // ── 1. 命名空间成员（binary. / c. / ffi. …）────────────────────
@@ -1057,11 +1210,20 @@ function getMemberCompletions(doc, text, dotOffset) {
     // internal/std/*.go 自动生成，故与实现始终一致。
     const nsMembers = ns_members_1.NS_MEMBERS[receiver];
     if (nsMembers) {
-        const items = nsMembers.map((name) => ({
-            label: name,
-            kind: node_1.CompletionItemKind.Function,
-            detail: `${receiver} 模块成员`,
-        }));
+        const items = nsMembers.map((name) => {
+            const meta = HOVER_INDEX.get(`${receiver}.${name}`);
+            const isGroup = receiver === 'term' && TERM_GROUPS.has(name);
+            return {
+                label: name,
+                kind: isGroup ? node_1.CompletionItemKind.Module : node_1.CompletionItemKind.Function,
+                detail: meta?.detail ?? `${receiver} 模块成员`,
+                documentation: meta
+                    ? { kind: node_1.MarkupKind.Markdown, value: (0, keywords_1.buildHoverDoc)(meta) }
+                    : undefined,
+                insertText: isGroup ? `${name}.` : `${name}(\${0})`,
+                insertTextFormat: isGroup ? node_1.InsertTextFormat.PlainText : node_1.InsertTextFormat.Snippet,
+            };
+        });
         // 未导入时，在列表顶部给出「一键补 import」选项
         const module = (0, imports_1.moduleForNamespace)(receiver);
         if (!importInfo.modules.has(module)) {
@@ -1072,8 +1234,7 @@ function getMemberCompletions(doc, text, dotOffset) {
                     kind: node_1.CompletionItemKind.Snippet,
                     detail: `使用 ${receiver}.xxx 前必须先导入该模块`,
                     insertText: '',
-                    // 附加字段供 onCompletionResolve 组装 WorkspaceEdit
-                    data: { autoImport: module, edits: edit },
+                    additionalTextEdits: edit,
                 });
             }
         }
@@ -1127,14 +1288,13 @@ function getMemberCompletions(doc, text, dotOffset) {
     }
     return members;
 }
+function functionCallSnippet(name, params) {
+    if (params.length === 0)
+        return `${name}(\${0})`;
+    const args = params.map((param, index) => `\${${index + 1}:${param}}`).join(', ');
+    return `${name}(${args})`;
+}
 connection.onCompletionResolve((item) => {
-    // 自动 import 项：把 import 语句作为附加编辑带上（选中该补全项即生效）
-    const d = item.data;
-    if (d?.autoImport && d.edits) {
-        item.additionalTextEdits = d.edits;
-        item.detail = `选中即自动补上 import "${d.autoImport}"`;
-        return item;
-    }
     // 补全时若没设置 detail/documentation，resolve 阶段补充
     if (item.documentation)
         return item;
@@ -1169,8 +1329,19 @@ connection.onDefinition((params) => {
     const word = getWordAt(text, offset);
     if (!word)
         return null;
-    const { symbols, funcs, varTypes } = analyzeDocument(doc);
     const wordStart = getWordStart(text, offset);
+    const wordEnd = wordStart + word.length;
+    const aliasPath = (0, imports_1.parseImports)(text).projectAliases.get(word);
+    if (aliasPath && /^\s*\./.test(text.slice(wordEnd))) {
+        const targetPath = (0, project_imports_1.resolveProjectImportPath)(aliasPath, textDocument.uri);
+        if (targetPath) {
+            return {
+                uri: (0, url_1.pathToFileURL)(targetPath).toString(),
+                range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+            };
+        }
+    }
+    const { symbols, funcs, varTypes } = analyzeDocument(doc);
     const receiver = /([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*$/.exec(text.slice(0, wordStart))?.[1];
     const method = receiver
         ? findMethodForReceiver(text, receiver, word, funcs, varTypes, textDocument.uri, currentMethodOwner(funcs, position.line))
@@ -1181,6 +1352,18 @@ connection.onDefinition((params) => {
             range: {
                 start: { line: method.declLine, character: method.declChar },
                 end: { line: method.declLine, character: method.declEndChar },
+            },
+        };
+    }
+    const aliasedImport = receiver
+        ? findAliasedImportedFunction(text, receiver, word, textDocument.uri)
+        : undefined;
+    if (aliasedImport) {
+        return {
+            uri: aliasedImport.uri,
+            range: {
+                start: { line: aliasedImport.declLine, character: aliasedImport.declChar },
+                end: { line: aliasedImport.declLine, character: aliasedImport.declEndChar },
             },
         };
     }
@@ -1291,6 +1474,9 @@ connection.onSignatureHelp((params) => {
             const sig = {
                 label: `${labelName}(${f.params.join(', ')})`,
                 parameters: f.params.map(p => node_1.ParameterInformation.create(p)),
+                documentation: f.documentation
+                    ? { kind: node_1.MarkupKind.Markdown, value: formatFunctionDocumentation(f, '第三方函数') }
+                    : undefined,
             };
             return { signatures: [sig], activeSignature: 0, activeParameter: Math.min(paramIdx, Math.max(f.params.length - 1, 0)) };
         }

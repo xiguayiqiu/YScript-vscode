@@ -37,14 +37,14 @@
 | 能力 | 说明 |
 |------|------|
 | 语法高亮 | 关键字、类型、内置函数、命名空间、文档注解标记、字符串插值、Shell 反引号、bytes 字面量、注释、数字、常量、Test 表达式、**C/FFI 类型**（`struct:int32,double`、`clong`/`culong`、`ptr`/`cstring`） |
-| 命名空间补全 | `ns.` 之后补全该模块全部成员（含 `io` 缓冲流 / Scanner、`c.`、`ffi.`、`lstd.`、`ocr.` 与 `load.`） |
+| 命名空间补全 | 输入命名空间名即可预览成员，`ns.` 后继续补全（含 `io` 缓冲流 / Scanner、`c.`、`ffi.`、`lstd.`、`ocr.` 与 `load.`）；标准库注册表中的成员均提供悬停与签名帮助，选择函数会插入 `()` |
 | **自动 import** | 检测「用了内置库却没 import」并给出警告；支持**一键快速修复**（`Ctrl+.`）与**补全联动**（输入 `binary.` 时列表首项即为「＋ 添加 import"binary"」，选中即自动写入） |
-| 智能补全 | 关键字、类型、内置函数（250+）、struct 方法（`func this.`）、warp/WaitGroup 成员、dict/list 方法、import 路径 |
-| 悬停文档 | 关键字/类型/内置函数的中文说明及签名提示 |
+| 智能补全 | 关键字、类型、内置函数（250+）、函数调用括号与参数占位、struct 方法（`func this.`）、warp/WaitGroup 成员、dict/list 方法、import 路径 |
+| 悬停文档 | 关键字/类型/内置函数及标准库函数的中文说明和调用形式；缺少扩展内置详解的成员可跳转到标准库函数速查表 |
 | 跳转定义 | 跳转到当前文件或第三方库的 `func`/`let`/`const`/`struct`/`enum`/`interface` 声明 |
 | 文档符号 | 大纲视图中显示函数、变量、类型 |
 | 诊断 | 插件内置 YScript 词法/语法检查、静态检查警告、括号未闭合、重复函数声明、顶层变量声明与函数外可执行语句检测、第三方导入函数同名冲突提示、敏感操作的 `#!permit` 权限提示；无需启动 `ysc -c` |
-| 自定义符号解析 | 当前文件和第三方库中的自定义函数、结构体方法支持补全、签名帮助、悬停和跳转定义；支持导入别名及相对路径库；同名函数候选不再按导入顺序误选 |
+| 自定义符号解析 | 当前文件和第三方库中的自定义函数、结构体方法支持补全、签名帮助、悬停和跳转定义；支持导入别名及相对路径库，并读取 `@函数名 HEAD/END` 文档块；同名函数候选不再按导入顺序误选 |
 | 格式化 | 右键菜单、命令面板支持“YScript: 格式化文档”，通过 `ysc fmt -t` 使用与 CLI 一致的格式化器，并仅更新编辑器缓冲区 |
 | 一键运行 | 编辑器标题栏 ▶ 按钮，通过 `ysc` 运行当前脚本 |
 | 调试 | 左侧 YScript Debug 入口和 VS Code 原生 DAP：行/函数/条件断点、日志点、单步、变量/栈查看、表达式求值与修改、未捕获异常暂停、执行跟踪及 TCP attach |
@@ -58,17 +58,18 @@
 
 | 前缀 | 描述 | 前缀 | 描述 |
 |------|------|------|------|
-| `pkgmain` | main 入口 | `ifile` | 检查文件存在 |
+| `main` / `pkgmain` | main 函数 / 完整入口 | `ifile` | 检查文件存在 |
 | `func` / `funcr` | 函数定义 | `idir` | 检查目录存在 |
 | `genericfunc` / `genericstruct` / `genericconstraint` | 泛型函数、泛型结构体与约束 | `infer` | `name <- value` 类型推断声明 |
 | `arrow` | 箭头函数 | `defer` | defer 延迟执行 |
 | `if` / `ifelse` / `ifelif` | if 分支 | `drec` | defer+recover |
-| `forr` / `forl` / `ford` | for 循环 | `warp` / `wawait` | 并发线程 |
+| `fori` / `forc` / `forr` / `fore` / `forl` / `ford` | 索引 / C 风格 / 范围 / 集合 / 列表 / 字典循环 | `warp` / `wawait` | 并发线程 |
 | `match` | 模式匹配（`=>` 分支） | `shell` / `sv` | Shell 命令 |
 | `tern` / `stm` / `mret` / `wsel` | 三元 / struct 方法 / 多返回值 / sync.select | `warp` / `wawait` | 并发线程 |
 | `st` / `stm` | struct/方法 | `bx` / `b64` | bytes 字面量 |
 | `en` / `iface` | enum/interface | `pscan` / `sscan` | 端口扫描 |
-| `let` / `lett` / `const` | 变量声明 | `hget` | HTTP GET |
+| `let` / `lett` / `const` / `ret` / `retn` | 变量声明 / 返回 | `pln` / `pf` | 输出 |
+| `ifnil` / `iferr` / `raise` / `catchmatch` | nil / error 检查与异常处理 | `deferclose` | 延迟关闭资源 |
 | `infer` | `name <- value` 类型推断声明 | `hsess` / `hform` | HTTP 会话 / 表单 |
 | `hup` / `hdown` | HTTP 上传 / 下载 | `pf` | printf |
 | `imp` | import | `#` / `#*` | 注释 |
@@ -173,16 +174,20 @@ cd ../vscode && npm run compile      # 或 ./node_modules/.bin/tsc -p server/tsc
 
 YScript 的标准库必须先 `import` 才能用。LSP 会自动帮你补上：
 
-**1. 诊断**：使用了内置模块却没导入时，该行出现黄色波浪线，例如
+**1. 自动导入**：在代码中使用未导入的内置模块成员（如 `binary.ReadFile(...)`）后，
+插件会自动在 `package` 声明后添加对应的 `import ["binary"]`，已有导入列表则会自动合并，
+无需手动维护标准库导入。
+
+**2. 诊断与快速修复**：自动导入未能应用时，该行会出现黄色波浪线，例如
 
 ```
 未导入模块 "binary"，请先写 import ["binary"]（或用快速修复自动添加）
 ```
 
-> `import "string"` 之后实际用的是 `strings.xxx`，所以提示的是 `import "string"]`；
-> `error` 同理对应 `errors`。
+> `import ["string"]` 之后实际用的是 `strings.xxx`；
+> `error` 同理对应 `import ["error"]` 和 `errors.xxx`。
 
-**2. 快速修复**：光标放在波浪线处按 `Ctrl+.`（或 `Cmd+.`），选「添加 import "binary"」即可。
+光标放在波浪线处按 `Ctrl+.`（或 `Cmd+.`），也可手动选择「添加 import "binary"」。
 支持三种插入风格，且不会重复添加：
 
 | 现状 | 结果 |
@@ -192,8 +197,11 @@ YScript 的标准库必须先 `import` 才能用。LSP 会自动帮你补上：
 | `import "c"` 单行 | 另起一行 `import "binary"` |
 | 完全没有 import | 插到 `package` 行之后 |
 
-**3. 补全联动**：输入 `binary.` 时，若未导入，补全列表**首项**是
+**3. 补全联动**：输入 `binary.` 时，若未导入，补全列表**首项**仍提供
 `＋ 添加 import "binary"`，按回车选中即自动写入 import 语句。
+
+自动检测适用于插件已知的标准库命名空间；第三方脚本库的路径无法仅凭成员名推断，
+仍需在 `import [...]` 中显式声明。
 
 **误报已排除**：字符串内、注释内、局部变量遮蔽（`let binary = 1`）、
 成员访问（`foo.binary`）均不会触发。

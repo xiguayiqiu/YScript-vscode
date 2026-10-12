@@ -4,7 +4,7 @@
  * 供 LSP 补全、悬停、签名帮助使用。
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SNIPPETS = exports.TYPE_INFERENCE_RULES = exports.TYPE_MEMBERS = exports.BUILTIN_FUNCTIONS = exports.TYPES = exports.KEYWORDS = void 0;
+exports.STDLIB_SIGNATURES = exports.SNIPPETS = exports.TYPE_INFERENCE_RULES = exports.TYPE_MEMBERS = exports.BUILTIN_FUNCTIONS = exports.TYPES = exports.KEYWORDS = void 0;
 exports.buildAllCompletions = buildAllCompletions;
 exports.buildHoverDoc = buildHoverDoc;
 exports.KEYWORDS = [
@@ -392,6 +392,15 @@ exports.BUILTIN_FUNCTIONS = [
     { label: 'stdio.confirm', kind: 'builtin', detail: 'y/n确认' },
     { label: 'stdio.select', kind: 'builtin', detail: '多选一菜单' },
     { label: 'stdio.clear', kind: 'builtin', detail: '清屏' },
+    { label: 'term.env', kind: 'module', detail: '终端环境探测子命名空间' },
+    { label: 'term.cap', kind: 'module', detail: '终端能力协商子命名空间' },
+    { label: 'term.io', kind: 'module', detail: '终端模式与状态子命名空间' },
+    { label: 'term.input', kind: 'module', detail: '键盘和鼠标输入解析子命名空间' },
+    { label: 'term.screen', kind: 'module', detail: '屏幕和光标管理子命名空间' },
+    { label: 'term.output', kind: 'module', detail: '字符网格与差分输出子命名空间' },
+    { label: 'term.style', kind: 'module', detail: '终端样式与颜色子命名空间' },
+    { label: 'term.text', kind: 'module', detail: '终端文本宽度与换行子命名空间' },
+    { label: 'term.ansi', kind: 'module', detail: 'ANSI 序列原语子命名空间' },
     { label: 'color.Red', kind: 'builtin', detail: '红色' },
     { label: 'color.Green', kind: 'builtin', detail: '绿色' },
     { label: 'color.Yellow', kind: 'builtin', detail: '黄色' },
@@ -699,6 +708,48 @@ exports.SNIPPETS = [
 function buildAllCompletions() {
     return [...exports.KEYWORDS, ...exports.TYPES, ...exports.BUILTIN_FUNCTIONS, ...exports.SNIPPETS];
 }
+/** Signatures verified against the standard-library documentation and implementation. */
+exports.STDLIB_SIGNATURES = {
+    'color.RGB': 'color.RGB(r, g, b)',
+    'color.RGBA': 'color.RGBA(r, g, b, a)',
+    'color.Color256': 'color.Color256(n)',
+    'color.Red': 'color.Red()',
+    'color.Green': 'color.Green()',
+    'color.Blue': 'color.Blue()',
+    'color.Yellow': 'color.Yellow()',
+    'color.Cyan': 'color.Cyan()',
+    'color.Magenta': 'color.Magenta()',
+    'color.White': 'color.White()',
+    'color.Bold': 'color.Bold(text)',
+    'color.Italic': 'color.Italic(text)',
+    'color.Underline': 'color.Underline(text)',
+    'color.Blink': 'color.Blink(text)',
+    'color.Reverse': 'color.Reverse(text)',
+    'color.Bg': 'color.Bg(color, text)',
+    'color.Sprint': 'color.Sprint(color, text)',
+    'color.Sprintf': 'color.Sprintf(color, format, ...args)',
+    'color.Print': 'color.Print(color, text)',
+    'color.Println': 'color.Println(color, text)',
+    'color.Reset': 'color.Reset()',
+    'cuda.available': 'cuda.available()',
+    'cuda.device_count': 'cuda.device_count()',
+    'cuda.device_name': 'cuda.device_name(device_id)',
+    'cuda.device_memory': 'cuda.device_memory(device_id)',
+    'cuda.Device_Info': 'cuda.Device_Info(device_id?)',
+    'cuda.Set_Device': 'cuda.Set_Device(device_id)',
+    'cuda.Sync': 'cuda.Sync()',
+    'cuda.MD4_Batch': 'cuda.MD4_Batch(inputs)',
+    'cuda.MD5_Batch': 'cuda.MD5_Batch(inputs)',
+    'cuda.SHA256_Batch': 'cuda.SHA256_Batch(inputs)',
+    'cuda.SHA512_Batch': 'cuda.SHA512_Batch(inputs)',
+    'cuda.SHA256d_Batch': 'cuda.SHA256d_Batch(inputs)',
+    'cuda.NTLM_Batch': 'cuda.NTLM_Batch(passwords)',
+    'cuda.HMAC_SHA1_Batch': 'cuda.HMAC_SHA1_Batch(key, messages)',
+    'cuda.HMAC_SHA256_Batch': 'cuda.HMAC_SHA256_Batch(key, messages)',
+    'cuda.HMAC_SHA512_Batch': 'cuda.HMAC_SHA512_Batch(key, messages)',
+    'cuda.PBKDF2_Batch': 'cuda.PBKDF2_Batch(passwords, salt, iterations, hash_alg, key_len?)',
+    'cuda.WPA2_PMK_Batch': 'cuda.WPA2_PMK_Batch(passwords, ssid)',
+};
 /** 构建悬停文档（markdown） */
 function buildHoverDoc(m) {
     const kindLabel = {

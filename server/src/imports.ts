@@ -10,13 +10,15 @@
  */
 
 import { TextEdit } from 'vscode-languageserver/node';
-import { NS_MEMBERS, MODULE_NAMESPACE } from './ns_members';
+import {
+  NS_MEMBERS,
+  MODULE_CANONICAL,
+  MODULE_NAMESPACE,
+  NAMESPACE_MODULE,
+} from './ns_members';
 
 /** 运行时命名空间 -> import 时要写的模块名 */
-const NS_TO_MODULE: Record<string, string> = {};
-for (const m of Object.keys(MODULE_NAMESPACE)) {
-  NS_TO_MODULE[MODULE_NAMESPACE[m]] = m;
-}
+const NS_TO_MODULE = NAMESPACE_MODULE;
 
 /** 所有内置运行时命名空间 */
 const ALL_NS = Object.keys(NS_MEMBERS);
@@ -131,6 +133,19 @@ export function parseImports(text: string): ImportInfo {
     hasImport = true;
     let statement = m[1];
     let endLine = i;
+    if (!statement.trim()) {
+      let nextLine = endLine + 1;
+      while (
+        nextLine < lines.length
+        && (lines[nextLine].trim() === '' || stripImportComments(lines[nextLine]).trim() === '')
+      ) {
+        nextLine++;
+      }
+      if (nextLine < lines.length && /^\s*\[/.test(lines[nextLine])) {
+        statement += `${'\n'.repeat(nextLine - endLine)}${lines[nextLine]}`;
+        endLine = nextLine;
+      }
+    }
     if (/^\s*\[/.test(statement)) {
       while (!importListIsClosed(statement) && endLine + 1 < lines.length) {
         statement += `\n${lines[++endLine]}`;
@@ -146,8 +161,9 @@ export function parseImports(text: string): ImportInfo {
     while ((g = re.exec(stripImportComments(statement))) !== null) {
       const path = g[1];
       // 本地文件路径（含 / 或以 ./ 开头）不是标准库，跳过
-      const isStdModule = NS_MEMBERS[path] !== undefined || Object.prototype.hasOwnProperty.call(MODULE_NAMESPACE, path);
-      if (path.includes('/') || path.startsWith('.') || !isStdModule) {
+      const moduleName = path.toLowerCase();
+      const namespace = MODULE_NAMESPACE[moduleName];
+      if (path.includes('/') || path.startsWith('.') || !namespace) {
         projectPaths.add(path);
         if (g[2]) {
           const alias = /\bas\s+(\w+)/.exec(g[2])?.[1];
@@ -155,8 +171,8 @@ export function parseImports(text: string): ImportInfo {
         }
         continue;
       }
-      modules.add(path);
-      namespaces.add(MODULE_NAMESPACE[path] || path);
+      modules.add(MODULE_CANONICAL[moduleName] || moduleName);
+      namespaces.add(namespace);
     }
   }
 
@@ -324,32 +340,48 @@ export function buildImportEdit(
   // 情况 1：已有列表形式 import [...]
   const listRe = /^\s*import\s*\[/;
   let listLine = -1;
+  let openLine = -1;
   for (let i = 0; i < lines.length; i++) {
     if (listRe.test(lines[i])) {
       listLine = i;
+      openLine = i;
+      break;
+    }
+    if (!/^\s*import\b\s*$/.test(lines[i])) continue;
+
+    let nextLine = i + 1;
+    while (
+      nextLine < lines.length
+      && (lines[nextLine].trim() === '' || stripImportComments(lines[nextLine]).trim() === '')
+    ) {
+      nextLine++;
+    }
+    if (nextLine < lines.length && /^\s*\[/.test(lines[nextLine])) {
+      listLine = i;
+      openLine = nextLine;
       break;
     }
   }
   if (listLine >= 0) {
     // 找到该 import 语句的结束行（] 所在行）与 ] 的列位置
-    let closeLine = listLine;
+    let closeLine = openLine;
     while (closeLine < lines.length && !/\]/.test(lines[closeLine])) closeLine++;
     const closeCol = lines[closeLine].indexOf(']');
 
     // 缩进推断：优先用列表内已有项的缩进；空列表则用 import 行的缩进 + 一个 tab
     let indent = '';
-    for (let i = listLine + 1; i < closeLine; i++) {
+    for (let i = openLine + 1; i < closeLine; i++) {
       const m = /^(\s+)"/.exec(lines[i]);
       if (m) { indent = m[1]; break; }
     }
     if (!indent) {
-      const base = (lines[listLine].match(/^\s*/) || [''])[0] || '';
+      const base = (lines[openLine].match(/^\s*/) || [''])[0] || '';
       indent = base + '\t';
     }
 
     const body = need.map((m) => `${indent}"${m}"`).join(',\n');
 
-    if (closeCol > 0) {
+    if (closeCol > 0 && lines[closeLine].slice(0, closeCol).trim().length > 0) {
       // ] 与内容同行，如 import ["json"] —— 单行风格用空格分隔，不套多行缩进
       const head = lines[closeLine].slice(0, closeCol).trimEnd();
       const sep = head.length > 0 && !head.endsWith(',') ? ', ' : '';
@@ -391,9 +423,9 @@ export function buildImportEdit(
       break;
     }
   }
-  const items = need.map((m) => `import "${m}"`).join('\n');
+  const items = `import [${need.map((m) => `"${m}"`).join(', ')}]`;
   const at = Math.min(insertLine, lines.length);
-  return [TextEdit.insert({ line: at, character: 0 }, items + '\n')];
+  return [TextEdit.insert({ line: at, character: 0 }, `${items}\n`)];
 }
 
 /**
@@ -402,7 +434,7 @@ export function buildImportEdit(
  * 例：strings.ToUpper 未导入时，应提示 import ["string"]（不是 "strings"）。
  */
 export function moduleForNamespace(ns: string): string {
-  return NS_TO_MODULE[ns] || ns;
+  return NS_TO_MODULE[ns] || (ns.startsWith('term.') ? 'term' : ns);
 }
 
 export { ALL_NS };

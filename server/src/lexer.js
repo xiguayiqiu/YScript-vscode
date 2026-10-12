@@ -35,9 +35,9 @@ const BUILTINS = new Set([
     'json', 'regex', 'encoding',
     'net', 'io', 'os', 'sys', 'path', 'strings', 'binary',
     'crypto', 'aes', 'rsa', 'ssl', 'raw', 'ffi',
-    'sync', 'time', 'rand', 'log', 'stdio', 'color',
+    'sync', 'time', 'rand', 'log', 'stdio', 'color', 'term',
     'yaml', 'toml', 'ini',
-    'reflect', 'errors', 'compress', 'cuda',
+    'reflect', 'errors', 'event', 'compress', 'cuda',
 ]);
 const LITERALS = new Set(['true', 'false', 'nil', 'nan', 'inf']);
 function tokenize(source) {
