@@ -242,12 +242,14 @@ export const BUILTIN_FUNCTIONS: CompletionItemMeta[] = [
   { label: 'regex.find_all', kind: 'builtin', detail: '查找全部匹配' },
   { label: 'regex.replace', kind: 'builtin', detail: '正则替换' },
 
-  { label: 'encoding.base64_encode', kind: 'builtin', detail: 'Base64编码' },
-  { label: 'encoding.base64_decode', kind: 'builtin', detail: 'Base64解码' },
-  { label: 'encoding.hex_encode', kind: 'builtin', detail: '十六进制编码' },
-  { label: 'encoding.hex_decode', kind: 'builtin', detail: '十六进制解码' },
-  { label: 'encoding.url_encode', kind: 'builtin', detail: 'URL编码' },
-  { label: 'encoding.url_decode', kind: 'builtin', detail: 'URL解码' },
+  { label: 'encoding.base64_encode', kind: 'builtin', detail: 'Base64编码', signature: 'encoding.base64_encode(data)', documentation: '将字符串或 bytes 编码为 Base64 字符串。' },
+  { label: 'encoding.base64_decode', kind: 'builtin', detail: 'Base64解码', signature: 'encoding.base64_decode(data)', documentation: '解码 Base64 字符串并返回 bytes；输入格式错误时会抛出错误。' },
+  { label: 'encoding.hex_encode', kind: 'builtin', detail: '十六进制编码', signature: 'encoding.hex_encode(data)', documentation: '将字符串或 bytes 编码为小写十六进制字符串。' },
+  { label: 'encoding.hex_decode', kind: 'builtin', detail: '十六进制解码', signature: 'encoding.hex_decode(data)', documentation: '解码十六进制字符串并返回 bytes；输入格式错误时会抛出错误。' },
+  { label: 'encoding.url_encode', kind: 'builtin', detail: 'URL编码', signature: 'encoding.url_encode(text)', documentation: '将文本中非 URL 非保留字符编码为百分号转义。' },
+  { label: 'encoding.url_decode', kind: 'builtin', detail: 'URL解码', signature: 'encoding.url_decode(text)', documentation: '解码 URL 百分号转义；按运行时实现处理不完整或无效的转义片段。' },
+  { label: 'encoding.html_encode', kind: 'builtin', detail: 'HTML编码', signature: 'encoding.html_encode(text)', documentation: '将文本中的常见 HTML 特殊字符转义。' },
+  { label: 'encoding.html_decode', kind: 'builtin', detail: 'HTML解码', signature: 'encoding.html_decode(text)', documentation: '解码运行时支持的 HTML 实体；未识别实体保持不变。' },
 
   { label: 'crypto.MD5', kind: 'builtin', detail: 'MD5哈希' },
   { label: 'crypto.SHA1', kind: 'builtin', detail: 'SHA1哈希' },
@@ -787,6 +789,14 @@ export function buildAllCompletions(): CompletionItemMeta[] {
 
 /** Signatures verified against the standard-library documentation and implementation. */
 export const STDLIB_SIGNATURES: Record<string, string> = {
+  'encoding.base64_encode': 'encoding.base64_encode(data)',
+  'encoding.base64_decode': 'encoding.base64_decode(data)',
+  'encoding.hex_encode': 'encoding.hex_encode(data)',
+  'encoding.hex_decode': 'encoding.hex_decode(data)',
+  'encoding.url_encode': 'encoding.url_encode(text)',
+  'encoding.url_decode': 'encoding.url_decode(text)',
+  'encoding.html_encode': 'encoding.html_encode(text)',
+  'encoding.html_decode': 'encoding.html_decode(text)',
   'color.RGB': 'color.RGB(r, g, b)',
   'color.RGBA': 'color.RGBA(r, g, b, a)',
   'color.Color256': 'color.Color256(n)',

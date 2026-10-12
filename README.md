@@ -203,6 +203,11 @@ YScript 的标准库必须先 `import` 才能用。LSP 会自动帮你补上：
 自动检测适用于插件已知的标准库命名空间；第三方脚本库的路径无法仅凭成员名推断，
 仍需在 `import [...]` 中显式声明。
 
+显式导入带别名的项目脚本库后，插件会分析导入的 `.ys` 文件并提供成员补全、悬停文档、
+签名帮助与跳转定义。例如 `import ["../lib/text/encoding_utils" as enc]` 后输入 `enc.`，
+可补全 `base64_round_trip`、`hex_round_trip`、`decode_url_or`、`html_escape`、
+`encoding_utils_encode_as` 等库函数；函数的 `@name HEAD` 文档注解会显示在悬停中。
+
 **误报已排除**：字符串内、注释内、局部变量遮蔽（`let binary = 1`）、
 成员访问（`foo.binary`）均不会触发。
 
