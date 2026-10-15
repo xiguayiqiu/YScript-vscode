@@ -52,6 +52,15 @@ const connection = (0, node_1.createConnection)();
 const documents = new node_1.TextDocuments(vscode_languageserver_textdocument_1.TextDocument);
 const ALL_COMPLETIONS = (0, keywords_1.buildAllCompletions)();
 const TERM_GROUPS = new Set(['env', 'cap', 'io', 'input', 'screen', 'output', 'style', 'text', 'ansi']);
+const COLOR_PRINT_METHODS = [
+    { name: 'red', detail: '红色输出' },
+    { name: 'green', detail: '绿色输出' },
+    { name: 'blue', detail: '蓝色输出' },
+    { name: 'yellow', detail: '黄色输出' },
+    { name: 'cyan', detail: '青色输出' },
+    { name: 'magenta', detail: '品红色输出' },
+    { name: 'white', detail: '白色输出' },
+];
 const HOVER_INDEX = new Map();
 for (const m of ALL_COMPLETIONS) {
     HOVER_INDEX.set(m.label, m);
@@ -95,6 +104,13 @@ connection.onInitialize((_params) => {
             definitionProvider: true,
             codeActionProvider: true,
             documentSymbolProvider: true,
+            semanticTokensProvider: {
+                legend: {
+                    tokenTypes: ['variable', 'function'],
+                    tokenModifiers: ['declaration', 'readonly', 'defaultLibrary'],
+                },
+                full: true,
+            },
             documentFormattingProvider: true,
             documentRangeFormattingProvider: true,
             referencesProvider: false,
@@ -226,6 +242,36 @@ function isIdentChar(ch) {
 function isIdent(name) {
     return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
 }
+function collectVariableDeclarations(tokens) {
+    const declarations = new Map();
+    const isName = (index) => ['identifier', 'builtin', 'type'].includes(tokens[index]?.type ?? '');
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i];
+        if (token.type === 'keyword' && ['let', 'var', 'const'].includes(token.value)) {
+            let target = i + 1;
+            while (isName(target)) {
+                declarations.set(target, token.value);
+                if (tokens[target + 1]?.value !== ',')
+                    break;
+                target += 2;
+            }
+            continue;
+        }
+        if (!isName(i))
+            continue;
+        const targets = [i];
+        let next = i + 1;
+        while (tokens[next]?.value === ',' && isName(next + 1)) {
+            targets.push(next + 1);
+            next += 2;
+        }
+        if (tokens[next]?.value === '<-') {
+            for (const tokenIndex of targets)
+                declarations.set(tokenIndex, 'let');
+        }
+    }
+    return Array.from(declarations, ([tokenIndex, kind]) => ({ tokenIndex, kind }));
+}
 // ---------------- 文档符号 + 作用域分析 ----------------
 /** 从源码中提取作用域（粗略：找 func/init 后匹配的 { ... } 块） */
 function analyzeDocument(doc) {
@@ -236,6 +282,7 @@ function analyzeDocument(doc) {
     const varTypes = new Map();
     const lines = text.split('\n');
     const tokens = (0, lexer_1.tokenize)(text);
+    const variableDeclarations = collectVariableDeclarations(tokens);
     // 1. 收集变量类型（先做类型推断）
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
@@ -358,27 +405,24 @@ function analyzeDocument(doc) {
             });
         }
     }
-    // 3. Variables, types, imports and package symbols.
+    // 3. Index each name in variable declarations, including multi-name declarations.
+    for (const declaration of variableDeclarations) {
+        const token = tokens[declaration.tokenIndex];
+        const start = { line: token.line - 1, character: token.col - 1 };
+        const end = { line: token.line - 1, character: token.col - 1 + token.value.length };
+        symbols.push({
+            name: token.value,
+            kind: declaration.kind === 'const' ? node_1.SymbolKind.Constant : node_1.SymbolKind.Variable,
+            range: { start, end },
+            selectionRange: { start, end },
+            detail: varTypes.get(token.value) ? `let ${token.value}: ${varTypes.get(token.value)}` : token.value,
+        });
+    }
+    // 4. Types, imports and package symbols.
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const trimmed = line.trim();
-        let m = /^(?:(let|const|var)\s+([A-Za-z_][A-Za-z0-9_]*)|([A-Za-z_][A-Za-z0-9_]*)\s*<-)/.exec(trimmed);
-        if (m) {
-            const kw = m[1] ?? 'let';
-            const name = m[2] ?? m[3];
-            const startChar = line.indexOf(name);
-            const start = { line: i, character: startChar };
-            const end = { line: i, character: startChar + name.length };
-            symbols.push({
-                name,
-                kind: kw === 'const' ? node_1.SymbolKind.Constant : node_1.SymbolKind.Variable,
-                range: { start, end },
-                selectionRange: { start, end },
-                detail: varTypes.get(name) ? `let ${name}: ${varTypes.get(name)}` : line.trim(),
-            });
-            continue;
-        }
-        m = /^(struct|class|enum|interface)\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(trimmed);
+        let m = /^(struct|class|enum|interface)\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(trimmed);
         if (m) {
             const name = m[2];
             const startChar = line.indexOf(name);
@@ -646,6 +690,14 @@ function validate(doc) {
             range: d.range,
             message: d.message,
             severity: node_1.DiagnosticSeverity.Error,
+            source: d.source,
+        });
+    }
+    for (const d of (0, syntax_1.unusedVariableDiagnostics)(tokens)) {
+        out.push({
+            range: d.range,
+            message: d.message,
+            severity: node_1.DiagnosticSeverity.Warning,
             source: d.source,
         });
     }
@@ -1004,6 +1056,10 @@ connection.onCompletion((params) => {
     const prefix = getWordPrefix(text, offset);
     const before = text.slice(Math.max(0, offset - 1), offset);
     const prevChar = before;
+    const colorPrintPrefix = /\b(print|println)\.([A-Za-z_]\w*)?$/.exec(text.slice(0, offset));
+    if (colorPrintPrefix) {
+        return getColorPrintCompletions(colorPrintPrefix[1], colorPrintPrefix[2] ?? '');
+    }
     // 1. 成员访问上下文
     if (prevChar === '.') {
         return getMemberCompletions(doc, text, offset - 1);
@@ -1186,6 +1242,9 @@ function getMemberCompletions(doc, text, dotOffset) {
     const receiver = text.slice(nameStart, dotOffset);
     if (!receiver)
         return [];
+    if (receiver === 'print' || receiver === 'println') {
+        return getColorPrintCompletions(receiver);
+    }
     const members = [];
     const importInfo = (0, imports_1.parseImports)(text);
     const aliasPath = importInfo.projectAliases.get(receiver);
@@ -1287,6 +1346,21 @@ function getMemberCompletions(doc, text, dotOffset) {
         }
     }
     return members;
+}
+function getColorPrintCompletions(receiver, prefix = '') {
+    return COLOR_PRINT_METHODS
+        .filter((color) => color.name.startsWith(prefix.toLowerCase()))
+        .map((color) => ({
+        label: color.name,
+        kind: node_1.CompletionItemKind.Method,
+        detail: color.detail,
+        documentation: {
+            kind: node_1.MarkupKind.Markdown,
+            value: `按需传入文本，例如：\`${receiver}.${color.name}("message")\``,
+        },
+        insertText: `${color.name}(\${0})`,
+        insertTextFormat: node_1.InsertTextFormat.Snippet,
+    }));
 }
 function functionCallSnippet(name, params) {
     if (params.length === 0)
@@ -1395,6 +1469,68 @@ connection.onDocumentSymbol((params) => {
     if (!doc)
         return [];
     return analyzeDocument(doc).symbols;
+});
+connection.languages.semanticTokens.on((params) => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc)
+        return { data: [] };
+    const analysis = analyzeDocument(doc);
+    const variables = new Set(analysis.symbols
+        .filter((symbol) => symbol.kind === node_1.SymbolKind.Variable || symbol.kind === node_1.SymbolKind.Constant)
+        .map((symbol) => symbol.name));
+    const functions = new Set();
+    const declarationTokens = new Map();
+    for (const symbol of analysis.symbols) {
+        const position = `${symbol.selectionRange.start.line}:${symbol.selectionRange.start.character}`;
+        if (symbol.kind === node_1.SymbolKind.Variable || symbol.kind === node_1.SymbolKind.Constant) {
+            declarationTokens.set(position, {
+                tokenType: 0,
+                modifiers: 1 | (symbol.kind === node_1.SymbolKind.Constant ? 2 : 0),
+            });
+        }
+        else if (symbol.kind === node_1.SymbolKind.Function || symbol.kind === node_1.SymbolKind.Method) {
+            functions.add(symbol.name.split('.').pop() ?? symbol.name);
+            declarationTokens.set(position, { tokenType: 1, modifiers: 1 });
+        }
+    }
+    for (const func of analysis.funcs.values()) {
+        for (const parameter of func.params) {
+            const name = /^[A-Za-z_][A-Za-z0-9_]*/.exec(parameter)?.[0];
+            if (name)
+                variables.add(name);
+        }
+    }
+    const tokens = (0, lexer_1.tokenize)(doc.getText());
+    const semantic = [];
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i];
+        if (token.type !== 'identifier' && token.type !== 'builtin')
+            continue;
+        const line = token.line - 1;
+        const character = token.col - 1;
+        const declaration = declarationTokens.get(`${line}:${character}`);
+        const isFunction = declaration?.tokenType === 1 || functions.has(token.value) ||
+            tokens[i + 1]?.value === '(';
+        if (!isFunction && !variables.has(token.value))
+            continue;
+        semantic.push({
+            line,
+            character,
+            length: token.value.length,
+            tokenType: isFunction ? 1 : 0,
+            modifiers: declaration?.modifiers ?? (token.type === 'builtin' && isFunction ? 4 : 0),
+        });
+    }
+    const data = [];
+    let previousLine = 0;
+    let previousCharacter = 0;
+    for (const token of semantic) {
+        const deltaLine = token.line - previousLine;
+        data.push(deltaLine, deltaLine === 0 ? token.character - previousCharacter : token.character, token.length, token.tokenType, token.modifiers);
+        previousLine = token.line;
+        previousCharacter = token.character;
+    }
+    return { data };
 });
 // ---------------- 签名帮助 ----------------
 connection.onSignatureHelp((params) => {

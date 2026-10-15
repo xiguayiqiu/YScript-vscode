@@ -328,6 +328,7 @@ function activate(context) {
                 cwd: folder?.uri.fsPath ?? path.dirname(program),
                 stopOnEntry: true,
                 traceLines: true,
+                internalConsoleOptions: 'openOnSessionStart',
             });
             if (!started) {
                 vscode_1.window.showErrorMessage('YScript: 调试会话未能启动，请检查 ysc 路径和调试输出');
@@ -392,7 +393,8 @@ function activate(context) {
             vscode_1.window.showErrorMessage('YScript: 插件检测到语法错误，请先修复诊断后再运行');
             return;
         }
-        const terminal = getYScriptTerminal(path.dirname(filePath));
+        const folder = vscode_1.workspace.getWorkspaceFolder(doc.uri);
+        const terminal = getYScriptTerminal(folder?.uri.fsPath ?? path.dirname(filePath));
         terminal.show(true);
         terminal.sendText(`${shellQuote(ysc)} ${shellQuote(filePath)}`, true);
     }));

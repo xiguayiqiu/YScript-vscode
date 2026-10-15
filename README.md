@@ -36,7 +36,7 @@
 
 | 能力 | 说明 |
 |------|------|
-| 语法高亮 | 关键字、类型、内置函数、命名空间、文档注解标记、字符串插值、Shell 反引号、bytes 字面量、注释、数字、常量、Test 表达式、**C/FFI 类型**（`struct:int32,double`、`clong`/`culong`、`ptr`/`cstring`） |
+| 语法高亮 | 关键字、类型、内置函数、命名空间、函数调用与变量引用的语义高亮、文档注解标记、字符串插值、Shell 反引号、bytes 字面量、注释、数字、常量、Test 表达式、**C/FFI 类型**（`struct:int32,double`、`clong`/`culong`、`ptr`/`cstring`） |
 | 命名空间补全 | 输入命名空间名即可预览成员，`ns.` 后继续补全（含 `io` 缓冲流 / Scanner、`c.`、`ffi.`、`lstd.`、`ocr.` 与 `load.`）；标准库注册表中的成员均提供悬停与签名帮助，选择函数会插入 `()` |
 | **自动 import** | 检测「用了内置库却没 import」并给出警告；支持**一键快速修复**（`Ctrl+.`）与**补全联动**（输入 `binary.` 时列表首项即为「＋ 添加 import"binary"」，选中即自动写入） |
 | 智能补全 | 关键字、类型、内置函数（250+）、函数调用括号与参数占位、struct 方法（`func this.`）、warp/WaitGroup 成员、dict/list 方法、import 路径 |
@@ -61,6 +61,7 @@
 | `main` / `pkgmain` | main 函数 / 完整入口 | `ifile` | 检查文件存在 |
 | `func` / `funcr` | 函数定义 | `idir` | 检查目录存在 |
 | `genericfunc` / `genericstruct` / `genericconstraint` | 泛型函数、泛型结构体与约束 | `infer` | `name <- value` 类型推断声明 |
+| `plnred` / `plngreen` / `plnyellow` / `plncyan` | 彩色 println | `cprint` / `cprintln` | color 库彩色输出 |
 | `arrow` | 箭头函数 | `defer` | defer 延迟执行 |
 | `if` / `ifelse` / `ifelif` | if 分支 | `drec` | defer+recover |
 | `fori` / `forc` / `forr` / `fore` / `forl` / `ford` | 索引 / C 风格 / 范围 / 集合 / 列表 / 字典循环 | `warp` / `wawait` | 并发线程 |

@@ -291,6 +291,39 @@ func main(args) {
   );
   assert.ok(yuiDefinition.result.range.start.line > 0);
 
+  const colorUri = 'file:///tmp/yscript-completion-test/color.ys';
+  send({
+    jsonrpc: '2.0',
+    method: 'textDocument/didOpen',
+    params: {
+      textDocument: { uri: colorUri, languageId: 'yscript', version: 1, text: 'println.' },
+    },
+  });
+  const colorMembers = await request('textDocument/completion', {
+    textDocument: { uri: colorUri },
+    position: { line: 0, character: 'println.'.length },
+    context: { triggerKind: 2, triggerCharacter: '.' },
+  });
+  const colorExamples = new Map(colorMembers.result.map((item) => [item.label, item.insertText]));
+  for (const name of ['red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'white']) {
+    assert.equal(colorExamples.get(name), `${name}(\${0})`, `missing println.${name} method`);
+  }
+
+  send({
+    jsonrpc: '2.0',
+    method: 'textDocument/didChange',
+    params: {
+      textDocument: { uri: colorUri, version: 2 },
+      contentChanges: [{ text: 'println.bl' }],
+    },
+  });
+  const bluePrefix = await request('textDocument/completion', {
+    textDocument: { uri: colorUri },
+    position: { line: 0, character: 'println.bl'.length },
+    context: { triggerKind: 2, triggerCharacter: 'l' },
+  });
+  assert.deepEqual(bluePrefix.result.map((item) => item.label), ['blue']);
+
   send({ jsonrpc: '2.0', id: nextId++, method: 'shutdown', params: null });
   send({ jsonrpc: '2.0', method: 'exit', params: null });
 });

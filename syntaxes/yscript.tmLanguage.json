@@ -84,7 +84,7 @@
     },
     "identifier": {
       "match": "[A-Za-z_][A-Za-z0-9_]*",
-      "name": "variable.other.yscript"
+      "name": "variable.other.readwrite.yscript"
     },
     "identifiers": {
       "patterns": [
@@ -421,7 +421,7 @@
           "match": "([A-Za-z_][A-Za-z0-9_]*)(\\s*)(<-)",
           "captures": {
             "1": {
-              "name": "variable.other.yscript"
+              "name": "variable.other.readwrite.yscript"
             },
             "3": {
               "name": "keyword.operator.assignment.yscript"

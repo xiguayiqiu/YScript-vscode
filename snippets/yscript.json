@@ -399,6 +399,48 @@
     ],
     "description": "输出一行文本"
   },
+  "red println": {
+    "prefix": "plnred",
+    "body": [
+      "println.red(\"${0:message}\")"
+    ],
+    "description": "红色输出一行文本"
+  },
+  "green println": {
+    "prefix": "plngreen",
+    "body": [
+      "println.green(\"${0:message}\")"
+    ],
+    "description": "绿色输出一行文本"
+  },
+  "yellow println": {
+    "prefix": "plnyellow",
+    "body": [
+      "println.yellow(\"${0:message}\")"
+    ],
+    "description": "黄色输出一行文本"
+  },
+  "cyan println": {
+    "prefix": "plncyan",
+    "body": [
+      "println.cyan(\"${0:message}\")"
+    ],
+    "description": "青色输出一行文本"
+  },
+  "color.Println": {
+    "prefix": "cprintln",
+    "body": [
+      "color.Println(color.Green(), \"${0:message}\")"
+    ],
+    "description": "使用 color 库以指定颜色输出一行文本"
+  },
+  "color.Print": {
+    "prefix": "cprint",
+    "body": [
+      "color.Print(color.Green(), \"${0:message}\")"
+    ],
+    "description": "使用 color 库以指定颜色输出文本"
+  },
   "if nil": {
     "prefix": "ifnil",
     "body": [

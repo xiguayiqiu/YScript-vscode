@@ -356,6 +356,7 @@ export function activate(context: ExtensionContext) {
           cwd: folder?.uri.fsPath ?? path.dirname(program),
           stopOnEntry: true,
           traceLines: true,
+          internalConsoleOptions: 'openOnSessionStart',
         });
         if (!started) {
           window.showErrorMessage('YScript: 调试会话未能启动，请检查 ysc 路径和调试输出');
@@ -429,7 +430,8 @@ export function activate(context: ExtensionContext) {
         return;
       }
 
-      const terminal = getYScriptTerminal(path.dirname(filePath));
+      const folder = workspace.getWorkspaceFolder(doc.uri);
+      const terminal = getYScriptTerminal(folder?.uri.fsPath ?? path.dirname(filePath));
       terminal.show(true);
       terminal.sendText(`${shellQuote(ysc)} ${shellQuote(filePath)}`, true);
     }),

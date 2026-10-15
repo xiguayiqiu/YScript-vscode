@@ -345,3 +345,92 @@ export function syntaxDiagnostics(tokens: Token[]): Diagnostic[] {
 
   return diagnostics;
 }
+
+export function unusedVariableDiagnostics(tokens: Token[]): Diagnostic[] {
+  const declarations = new Map<number, { name: string; functionIndex: number }>();
+  const tokenFunctions = new Array<number>(tokens.length).fill(-1);
+  const isName = (token: Token | undefined) =>
+    token?.type === 'identifier' || token?.type === 'type' || token?.type === 'builtin';
+  const assignmentOperators = new Set(['=', '<-', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>=']);
+  let braceDepth = 0;
+  let functionDepth = -1;
+  let functionIndex = -1;
+  let pendingFunction = -1;
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if ((token.value === 'func' || token.value === 'init') && functionDepth < 0) {
+      pendingFunction = i;
+    }
+    if (token.value === '{') {
+      braceDepth++;
+      if (pendingFunction >= 0 && functionDepth < 0) {
+        functionDepth = braceDepth;
+        functionIndex = pendingFunction;
+        pendingFunction = -1;
+      }
+      tokenFunctions[i] = functionIndex;
+      continue;
+    }
+    if (token.value === '}') {
+      tokenFunctions[i] = functionIndex;
+      if (functionDepth === braceDepth) {
+        functionDepth = -1;
+        functionIndex = -1;
+      }
+      braceDepth = Math.max(0, braceDepth - 1);
+      continue;
+    }
+    if (functionDepth < 0) continue;
+    tokenFunctions[i] = functionIndex;
+
+    if (token.type === 'keyword' && ['let', 'var', 'const'].includes(token.value)) {
+      let nameIndex = i + 1;
+      while (isName(tokens[nameIndex])) {
+        declarations.set(nameIndex, { name: tokens[nameIndex].value, functionIndex });
+        if (tokens[nameIndex + 1]?.value !== ',') break;
+        nameIndex += 2;
+      }
+      continue;
+    }
+    if (token.value !== '<-' || !isName(tokens[i - 1])) continue;
+
+    let nameIndex = i - 1;
+    declarations.set(nameIndex, { name: tokens[nameIndex].value, functionIndex });
+    while (tokens[nameIndex - 1]?.value === ',' && isName(tokens[nameIndex - 2])) {
+      nameIndex -= 2;
+      declarations.set(nameIndex, { name: tokens[nameIndex].value, functionIndex });
+    }
+  }
+
+  const diagnostics: Diagnostic[] = [];
+  for (const [declarationIndex, declaration] of declarations) {
+    const { name, functionIndex: declarationFunction } = declaration;
+    if (name.startsWith('_')) continue;
+    let used = false;
+    for (let i = 0; i < tokens.length; i++) {
+      if (i === declarationIndex || !isName(tokens[i]) || tokens[i].value !== name) continue;
+      if (tokenFunctions[i] !== declarationFunction) continue;
+      if (tokens[i - 1]?.value === '.' || tokens[i - 1]?.value === '?.') continue;
+
+      let targetEnd = i + 1;
+      while (tokens[targetEnd]?.value === ',' && isName(tokens[targetEnd + 1])) targetEnd += 2;
+      if (assignmentOperators.has(tokens[targetEnd]?.value ?? '')) continue;
+      used = true;
+      break;
+    }
+    if (used) continue;
+
+    const token = tokens[declarationIndex];
+    diagnostics.push({
+      range: {
+        start: { line: token.line - 1, character: token.col - 1 },
+        end: { line: token.line - 1, character: token.col - 1 + token.value.length },
+      },
+      message: `变量 "${name}" 已声明但未使用`,
+      severity: 'warning',
+      source: 'yscript',
+    });
+  }
+  return diagnostics;
+}
