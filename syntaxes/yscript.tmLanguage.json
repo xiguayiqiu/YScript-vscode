@@ -553,6 +553,10 @@
           "match": "\\?(?![.?])"
         },
         {
+          "name": "keyword.operator.increment-decrement.yscript",
+          "match": "(\\+\\+|--)"
+        },
+        {
           "name": "keyword.operator.assignment.yscript",
           "match": "(<<=|>>=|\\+=|-=|\\*=|/=|%=|&=|\\|=|\\^=|=)"
         },

@@ -206,6 +206,16 @@ export function syntaxDiagnostics(tokens: Token[]): Diagnostic[] {
         report(token, `运算符 '${token.value}' 后需要表达式`);
       }
     }
+    // 自增自减：前缀 ++x/--x 或后缀 x++/x--，操作数必须是变量（与 ysc 编译器口径一致）
+    if (token.value === '++' || token.value === '--') {
+      const prev = tokens[i - 1];
+      const next = tokens[i + 1];
+      const isName = (t?: Token) =>
+        t?.type === 'identifier' || t?.type === 'builtin' || t?.type === 'type';
+      if (!isName(prev) && !isName(next)) {
+        report(token, '自增自减运算符只能用于变量');
+      }
+    }
     if ((token.value === 'if' || token.value === 'while' || token.value === 'switch' || token.value === 'match') &&
       tokens[i + 1]?.value === '{') {
       report(tokens[i + 1], `${token.value} 后需要条件表达式`);

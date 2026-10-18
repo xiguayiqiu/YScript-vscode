@@ -39,7 +39,8 @@ import {
   CodeActionParams,
 } from 'vscode-languageserver/node';
 import * as fs from 'fs';
-import { pathToFileURL } from 'url';
+import * as path from 'path';
+import { pathToFileURL, fileURLToPath } from 'url';
 import { importPathAtOffset, resolveProjectImportPath, resolveProjectImportFiles } from './project_imports';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 
@@ -112,7 +113,7 @@ connection.onInitialize((_params: InitializeParams): InitializeResult => {
       hoverProvider: true,
       completionProvider: {
         resolveProvider: true,
-        triggerCharacters: ['.', ':', ' ', '"', '`', '/', '#', '!', '_', ...'abcdefghijklmnopqrstuvwxyz'],
+        triggerCharacters: ['.', ':', ' ', '"', '`', '/', '#', '!', '_', '>', ...'abcdefghijklmnopqrstuvwxyz'],
       },
       definitionProvider: true,
       codeActionProvider: true,
@@ -155,12 +156,39 @@ interface FuncInfo {
   params: string[];
   documentation?: string;
   methodOwner?: string;
+  /** 声明的返回类型（来自 `-> T`），用于变量类型推断 */
+  returnType?: string;
   uri: string;
   declLine: number;
   declChar: number;
   declEndChar: number;
   bodyStartLine: number;
   bodyEndLine: number;
+}
+
+/** struct/class 的字段 */
+interface FieldInfo {
+  name: string;
+  type: string;
+  detail: string;
+  uri: string;
+  declLine: number;
+  declChar: number;
+  declEndChar: number;
+}
+
+interface StructInfo {
+  name: string;
+  fields: FieldInfo[];
+  /** `struct Dog extends Animal` 的父结构体名 */
+  parent?: string;
+  uri: string;
+}
+
+interface EnumInfo {
+  name: string;
+  members: string[];
+  uri: string;
 }
 
 interface Scope {
@@ -259,6 +287,22 @@ function isIdent(name: string): boolean {
   return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
 }
 
+/**
+ * 前缀匹配：除前缀外还允许子串命中，
+ * 如输入 `file` 也能补出 `io.read_file`、`write_file` 等。
+ */
+function matchesPrefix(label: string, prefix: string): boolean {
+  if (!prefix) return true;
+  const lower = label.toLowerCase();
+  const p = prefix.toLowerCase();
+  return lower.startsWith(p) || lower.includes(p);
+}
+
+/** 取尾部标识符（用于类型上下文中冒号/空格之后已输入的部分）。 */
+function trailingWord(text: string): string {
+  return /([A-Za-z_][A-Za-z0-9_]*)$/.exec(text)?.[1] ?? '';
+}
+
 function collectVariableDeclarations(tokens: ReturnType<typeof tokenize>): Array<{
   tokenIndex: number;
   kind: 'let' | 'var' | 'const';
@@ -300,45 +344,21 @@ function analyzeDocument(doc: TextDocument): {
   scopes: Scope[];
   funcs: Map<string, FuncInfo>;
   varTypes: Map<string, string>;
+  structs: Map<string, StructInfo>;
+  enums: Map<string, EnumInfo>;
+  funcReturnTypes: Map<string, string>;
 } {
   const text = doc.getText();
   const symbols: DocumentSymbol[] = [];
   const scopes: Scope[] = [];
   const funcs = new Map<string, FuncInfo>();
   const varTypes = new Map<string, string>();
+  const structs = new Map<string, StructInfo>();
+  const enums = new Map<string, EnumInfo>();
+  const funcReturnTypes = new Map<string, string>();
   const lines = text.split('\n');
   const tokens = tokenize(text);
   const variableDeclarations = collectVariableDeclarations(tokens);
-
-  // 1. 收集变量类型（先做类型推断）
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const inferredDecl = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*<-\s*/.exec(line);
-    const inferenceLine = inferredDecl
-      ? line.replace('<-', '=')
-      : line;
-    const m = /^\s*(let|const|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*[:=]/.exec(line);
-    const name = m?.[2] ?? inferredDecl?.[1];
-    if (name) {
-      const structLiteral = /^\s*(?:(?:let|const|var)\s+)?[A-Za-z_][A-Za-z0-9_]*\s*(?::[^=]+)?=\s*([A-Za-z_][A-Za-z0-9_]*)\s*\{/.exec(inferenceLine);
-      if (structLiteral) varTypes.set(name, structLiteral[1]);
-      for (const rule of TYPE_INFERENCE_RULES) {
-        if (structLiteral) break;
-        if (rule.regex.test(inferenceLine)) {
-          const t = rule.type;
-          const match = /new\s+(\w+)/.exec(inferenceLine);
-          if (match) varTypes.set(name, match[1]);
-          else varTypes.set(name, t);
-          break;
-        }
-      }
-    }
-    // 显式类型标注: let x: int = ...
-    const m2 = /^\s*(let|const|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([A-Za-z_][A-Za-z0-9_<>,\s]*?)\s*=/.exec(line);
-    if (m2) {
-      varTypes.set(m2[2], m2[3].trim().split(/\s/)[0]);
-    }
-  }
 
   // 2. Extract declarations from tokens so comments and multiline signatures do not affect symbols.
   let lastStructName = '';
@@ -354,6 +374,31 @@ function analyzeDocument(doc: TextDocument): {
       const typeName = tokens[i + 1];
       if (typeName?.type === 'identifier' || typeName?.type === 'builtin' || typeName?.type === 'type') {
         lastStructName = typeName.value;
+        const bounds = findBlockBounds(tokens, i + 2);
+        if (bounds) {
+          const body = text.slice(tokens[bounds.open].end, tokens[bounds.close].start);
+          structs.set(typeName.value, {
+            name: typeName.value,
+            fields: parseStructFields(body, tokens[bounds.open].end, text, doc.uri),
+            parent: findStructParent(tokens, i + 2, bounds.open),
+            uri: doc.uri,
+          });
+        }
+      }
+      continue;
+    }
+    if (token.value === 'enum') {
+      const typeName = tokens[i + 1];
+      if (typeName?.type === 'identifier' || typeName?.type === 'builtin' || typeName?.type === 'type') {
+        const bounds = findBlockBounds(tokens, i + 2);
+        if (bounds) {
+          const body = text.slice(tokens[bounds.open].end, tokens[bounds.close].start);
+          enums.set(typeName.value, {
+            name: typeName.value,
+            members: parseEnumMembers(body),
+            uri: doc.uri,
+          });
+        }
       }
       continue;
     }
@@ -382,6 +427,7 @@ function analyzeDocument(doc: TextDocument): {
       : -1;
     const bodyStartLine = bodyClose >= 0 ? tokens[bodyOpen].line : token.line;
     const bodyEndLine = bodyClose >= 0 ? tokens[bodyClose].line : token.line;
+    const returnType = findReturnType(tokens, closeParen + 1, bodyOpen);
     const lineIndex = token.line - 1;
     const name = kind === 'init' ? 'init' : nameToken.value;
     const startChar = nameToken.col - 1;
@@ -407,11 +453,13 @@ function analyzeDocument(doc: TextDocument): {
     });
 
     if (kind === 'func') {
-      funcs.set(owner ? `${owner}.${name}` : name, {
+      const key = owner ? `${owner}.${name}` : name;
+      funcs.set(key, {
         name,
         params,
         documentation: extractNamedFunctionDocumentation(text, name),
         methodOwner: owner,
+        returnType,
         uri: doc.uri,
         declLine: nameToken.line - 1,
         declChar: startChar,
@@ -419,6 +467,64 @@ function analyzeDocument(doc: TextDocument): {
         bodyStartLine: bodyStartLine - 1,
         bodyEndLine: bodyEndLine - 1,
       });
+      if (returnType) funcReturnTypes.set(key, returnType);
+    }
+  }
+
+  // 1. 收集变量类型（依赖函数返回类型，故在声明索引之后进行）
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const inferredDecl = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*<-\s*/.exec(line);
+    const inferenceLine = inferredDecl
+      ? line.replace('<-', '=')
+      : line;
+    // 显式类型标注: let x: int = ...
+    const m2 = /^\s*(let|const|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([A-Za-z_][A-Za-z0-9_<>,\s]*?)\s*=/.exec(line);
+    if (m2) {
+      varTypes.set(m2[2], m2[3].trim().split(/\s/)[0]);
+      continue;
+    }
+    const m = /^\s*(let|const|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*[:=]/.exec(line);
+    const name = m?.[2] ?? inferredDecl?.[1];
+    if (!name) continue;
+
+    // 结构体字面量: let p = Point{...}
+    const structLiteral = /^\s*(?:(?:let|const|var)\s+)?[A-Za-z_][A-Za-z0-9_]*\s*(?::[^=]+)?=\s*([A-Za-z_][A-Za-z0-9_]*)\s*\{/.exec(inferenceLine);
+    if (structLiteral) {
+      varTypes.set(name, structLiteral[1]);
+      continue;
+    }
+    // new Type()
+    const newMatch = /=\s*new\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(inferenceLine);
+    if (newMatch) {
+      varTypes.set(name, newMatch[1]);
+      continue;
+    }
+    // 函数调用返回值: let x = makePoint() / let x = this.makePoint()
+    const callMatch = /=\s*([A-Za-z_][A-Za-z0-9_.]*)\s*\(/.exec(inferenceLine);
+    if (callMatch) {
+      const funcName = callMatch[1];
+      const returnTypeOf = funcReturnTypes.get(funcName)
+        ?? funcReturnTypes.get(funcName.split('.').pop() ?? funcName);
+      if (returnTypeOf) {
+        varTypes.set(name, returnTypeOf);
+        continue;
+      }
+    }
+    for (const rule of TYPE_INFERENCE_RULES) {
+      if (rule.regex.test(inferenceLine)) {
+        varTypes.set(name, rule.type);
+        break;
+      }
+    }
+  }
+
+  // 1.5 函数参数类型：`func f(s: string)` 内的 `s.` 能直接补全 string 成员
+  for (const func of funcs.values()) {
+    for (const param of func.params) {
+      const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([A-Za-z_][A-Za-z0-9_]*)/.exec(param);
+      if (!m || varTypes.has(m[1])) continue;
+      varTypes.set(m[1], normalizeTypeName(m[2]));
     }
   }
 
@@ -479,7 +585,228 @@ function analyzeDocument(doc: TextDocument): {
     }
   }
 
-  return { symbols, scopes, funcs, varTypes };
+  return { symbols, scopes, funcs, varTypes, structs, enums, funcReturnTypes };
+}
+
+/** 找到一个声明体的 `{ ... }` 边界（用于 struct/class/enum）。 */
+function findBlockBounds(tokens: ReturnType<typeof tokenize>, fromIndex: number): { open: number; close: number } | null {
+  const stop = new Set(['func', 'struct', 'class', 'enum', 'interface', 'import', 'package', 'let', 'const', 'var', 'return', 'if', 'for', 'while']);
+  let open = -1;
+  for (let i = fromIndex; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token.value === '{') { open = i; break; }
+    if (token.value === ';') return null;
+    if (token.type === 'keyword' && stop.has(token.value)) return null;
+  }
+  if (open < 0) return null;
+  const close = matchingTokenIndex(tokens, open, '{', '}');
+  return close < 0 ? null : { open, close };
+}
+
+/** 读取 `struct X extends Parent {` 中的 Parent。 */
+function findStructParent(tokens: ReturnType<typeof tokenize>, fromIndex: number, openIndex: number): string | undefined {
+  for (let i = fromIndex; i < openIndex; i++) {
+    if (tokens[i].value !== 'extends') continue;
+    const parent = tokens[i + 1];
+    if (parent && (parent.type === 'identifier' || parent.type === 'builtin' || parent.type === 'type')) {
+      return parent.value;
+    }
+  }
+  return undefined;
+}
+
+/** 读取 `func name(...) -> Type {` 中的返回类型。 */
+function findReturnType(tokens: ReturnType<typeof tokenize>, fromIndex: number, toIndex: number): string | undefined {
+  for (let i = fromIndex; i < toIndex && i < tokens.length; i++) {
+    if (tokens[i].value !== '->') continue;
+    const type = tokens[i + 1];
+    if (type && (type.type === 'identifier' || type.type === 'builtin' || type.type === 'type')) {
+      return type.value;
+    }
+    return undefined;
+  }
+  return undefined;
+}
+
+/** 去掉注释内容（等长替换，保留换行与列位置），供结构体/枚举体解析使用。 */
+function stripBlockComments(source: string): string {
+  let out = '';
+  let quote = '';
+  let lineComment = false;
+  let blockComment = false;
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i];
+    const next = source[i + 1];
+    if (lineComment) {
+      if (c === '\n') { lineComment = false; out += '\n'; } else out += ' ';
+      continue;
+    }
+    if (blockComment) {
+      if (c === '*' && next === '#') { blockComment = false; out += '  '; i++; } else out += c === '\n' ? '\n' : ' ';
+      continue;
+    }
+    if (quote) {
+      out += c;
+      if (c === '\\') { out += next ?? ''; i++; }
+      else if (c === quote) quote = '';
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') { quote = c; out += c; continue; }
+    if (c === '#' && next === '*') { blockComment = true; out += '  '; i++; continue; }
+    if (c === '#') { lineComment = true; out += ' '; continue; }
+    out += c;
+  }
+  return out;
+}
+
+/** 在深度 0 处按逗号/换行拆分（忽略括号与尖括号内的分隔符）。 */
+function splitTopLevelMembers(source: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let quote = '';
+  let start = 0;
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i];
+    if (quote) {
+      if (c === '\\') i++;
+      else if (c === quote) quote = '';
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') { quote = c; continue; }
+    if (c === '(' || c === '[' || c === '{' || c === '<') depth++;
+    else if (c === ')' || c === ']' || c === '}' || c === '>') depth = Math.max(0, depth - 1);
+    else if ((c === ',' || c === '\n') && depth === 0) {
+      parts.push(source.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(source.slice(start));
+  return parts.map((p) => p.trim()).filter(Boolean);
+}
+
+/** 解析结构体 body 中的字段：`name: type [= default]`。 */
+function parseStructFields(
+  body: string,
+  bodyStart: number,
+  text: string,
+  uri: string,
+): FieldInfo[] {
+  const fields: FieldInfo[] = [];
+  const clean = stripBlockComments(body);
+  const seen = new Set<string>();
+  let cursor = 0;
+  for (const part of splitTopLevelMembers(clean)) {
+    const idx = clean.indexOf(part, cursor);
+    if (idx >= 0) cursor = idx + part.length;
+    const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([\s\S]+)$/.exec(part);
+    if (!m) continue;
+    const fieldName = m[1];
+    if (seen.has(fieldName)) continue;
+    seen.add(fieldName);
+    const type = m[2].replace(/\s*=[\s\S]*$/, '').trim();
+    const nameOffset = (idx >= 0 ? idx : 0) + part.indexOf(fieldName);
+    const pos = offsetToPosition(text, bodyStart + nameOffset);
+    fields.push({
+      name: fieldName,
+      type,
+      detail: `${fieldName}: ${type}`,
+      uri,
+      declLine: pos.line,
+      declChar: pos.character,
+      declEndChar: pos.character + fieldName.length,
+    });
+  }
+  return fields;
+}
+
+/** 解析枚举 body 中的成员名（`A` / `B = 2` / `C = "x"`）。 */
+function parseEnumMembers(body: string): string[] {
+  const members: string[] = [];
+  for (const part of splitTopLevelMembers(stripBlockComments(body))) {
+    const m = /^([A-Za-z_][A-Za-z0-9_]*)/.exec(part);
+    if (m) members.push(m[1]);
+  }
+  return members;
+}
+
+/** 去掉类型名的泛型参数：`list<T>` → `list`。 */
+function normalizeTypeName(type: string): string {
+  const base = type.trim().replace(/\s*<.*$/, '').trim();
+  return base.replace(/^[?@>]+/, '');
+}
+
+/** 沿继承链查找字段信息。 */
+function findFieldInfo(typeName: string, fieldName: string, structs: Map<string, StructInfo>): FieldInfo | undefined {
+  const seen = new Set<string>();
+  let current = structs.get(normalizeTypeName(typeName));
+  while (current && !seen.has(current.name)) {
+    seen.add(current.name);
+    const field = current.fields.find((f) => f.name === fieldName);
+    if (field) return field;
+    current = current.parent ? structs.get(current.parent) : undefined;
+  }
+  return undefined;
+}
+
+/** 沿继承链查找字段类型。 */
+function findFieldType(typeName: string, fieldName: string, structs: Map<string, StructInfo>): string | undefined {
+  const field = findFieldInfo(typeName, fieldName, structs);
+  return field ? normalizeTypeName(field.type) : undefined;
+}
+
+/** 收集结构体自身及继承链上的全部字段（自身优先）。 */
+function collectStructFields(typeName: string, structs: Map<string, StructInfo>): FieldInfo[] {
+  const out: FieldInfo[] = [];
+  const seenTypes = new Set<string>();
+  const seenFields = new Set<string>();
+  let current = structs.get(normalizeTypeName(typeName));
+  while (current && !seenTypes.has(current.name)) {
+    seenTypes.add(current.name);
+    for (const field of current.fields) {
+      if (seenFields.has(field.name)) continue;
+      seenFields.add(field.name);
+      out.push(field);
+    }
+    current = current.parent ? structs.get(current.parent) : undefined;
+  }
+  return out;
+}
+
+/** 收集结构体自身及继承链（自身在前），用于补全/查找继承的方法。 */
+function collectStructMethodOwners(typeName: string, structs: Map<string, StructInfo>): string[] {
+  const owners: string[] = [];
+  const seen = new Set<string>();
+  let current = structs.get(normalizeTypeName(typeName));
+  while (current && !seen.has(current.name)) {
+    seen.add(current.name);
+    owners.push(current.name);
+    current = current.parent ? structs.get(current.parent) : undefined;
+  }
+  return owners;
+}
+
+/**
+ * 解析接收者的类型，支持链式访问：
+ *   p        -> varTypes['p']
+ *   this     -> 当前方法所属结构体
+ *   pkt.ip   -> Packet.ip 的字段类型 IPHeader
+ *   Color    -> 结构体/枚举名本身
+ */
+function resolveReceiverType(
+  receiver: string,
+  varTypes: Map<string, string>,
+  structs: Map<string, StructInfo>,
+  contextOwner?: string,
+): string | undefined {
+  if (receiver === 'this' || receiver === 'self') return contextOwner;
+  const parts = receiver.split('.').filter(Boolean);
+  if (parts.length === 0) return undefined;
+  const first = parts[0];
+  let current = varTypes.get(first) ?? (structs.has(first) ? first : undefined);
+  for (let i = 1; i < parts.length && current; i++) {
+    current = findFieldType(current, parts[i], structs);
+  }
+  return current;
 }
 
 function extractNamedFunctionDocumentation(source: string, name: string): string | undefined {
@@ -581,14 +908,47 @@ function topLevelCodeDiagnostics(text: string, tokens: ReturnType<typeof tokeniz
       continue;
     }
 
-    const isVariable = value === 'let' || value === 'const' || value === 'var';
+    if (value === 'let' || value === 'const') {
+      let parens = 0;
+      let brackets = 0;
+      let braces = 0;
+      let previous = token;
+      for (let j = i + 1; j < tokens.length; j++) {
+        const next = tokens[j];
+        if (parens === 0 && brackets === 0 && braces === 0) {
+          if (next.value === ';') {
+            i = j;
+            break;
+          }
+          const canEndExpression = (
+            previous.type !== 'keyword' &&
+            ['identifier', 'type', 'builtin', 'literal', 'number', 'string', 'regexp', 'shell', 'bytes'].includes(previous.type)
+          ) || [')', ']', '}'].includes(previous.value);
+          if (next.line > previous.line && canEndExpression &&
+            ![',', '.', '?.', '+', '-', '*', '/', '%', '==', '!=', '<', '>', '<=', '>=', '&&', '||', '|>', '=', '<-', ':'].includes(next.value)) {
+            i = j - 1;
+            break;
+          }
+        }
+        if (next.value === '(') parens++;
+        else if (next.value === ')') parens--;
+        else if (next.value === '[') brackets++;
+        else if (next.value === ']') brackets--;
+        else if (next.value === '{') braces++;
+        else if (next.value === '}') braces--;
+        previous = next;
+        i = j;
+      }
+      continue;
+    }
+
     out.push({
       range: {
         start: offsetToPosition(text, token.start),
         end: offsetToPosition(text, token.end),
       },
-      message: isVariable
-        ? '顶层不能声明变量或常量，请在 func main() 或其他函数内编写逻辑'
+      message: value === 'var'
+        ? 'var 只能用于函数内部声明局部变量，顶层请用 let'
         : '顶层不能执行语句，请在 package main 的 func main() 或其他函数内编写',
       severity: DiagnosticSeverity.Error,
       source: 'yscript',
@@ -1012,17 +1372,41 @@ connection.onHover(({ textDocument, position }: HoverParams): Hover | null => {
   }
 
   // 用户定义
-  const { funcs, varTypes, symbols } = analyzeDocument(doc);
+  const { funcs, varTypes, symbols, structs, enums } = analyzeDocument(doc);
   const localMemberReceiver = /([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*$/.exec(text.slice(0, wordStart));
   if (localMemberReceiver) {
     const method = findMethodForReceiver(
-      text, localMemberReceiver[1], word, funcs, varTypes, doc.uri, currentMethodOwner(funcs, position.line),
+      text, localMemberReceiver[1], word, funcs, varTypes, doc.uri, currentMethodOwner(funcs, position.line), structs,
     );
     if (method) {
       return {
         contents: {
           kind: MarkupKind.Markdown,
           value: formatFunctionDocumentation(method, '方法'),
+        },
+      };
+    }
+  }
+  if (memberReceiver) {
+    const contextOwner = currentMethodOwner(funcs, position.line);
+    const receiverType = resolveReceiverType(memberReceiver, varTypes, structs, contextOwner);
+    if (receiverType) {
+      const fieldType = findFieldType(receiverType, word, structs);
+      if (fieldType) {
+        return {
+          contents: {
+            kind: MarkupKind.Markdown,
+            value: `**${word}** _(字段)_\n\n类型: \`${fieldType}\`\n\n所属结构体: \`${receiverType}\``,
+          },
+        };
+      }
+    }
+    const enumInfo = enums.get(memberReceiver);
+    if (enumInfo && enumInfo.members.includes(word)) {
+      return {
+        contents: {
+          kind: MarkupKind.Markdown,
+          value: `**${word}** _(枚举值)_\n\n属于枚举 \`${memberReceiver}\``,
         },
       };
     }
@@ -1092,7 +1476,24 @@ connection.onCompletion((params: CompletionParams): CompletionItem[] => {
   const offset = positionToOffset(text, position);
   const permissionCompletions = getPermissionDirectiveCompletions(text, position, offset);
   if (permissionCompletions) return permissionCompletions;
+
+  // import 语句内的路径补全必须在「字符串内部」守卫之前处理
+  const importPathCompletions = getImportPathCompletions(doc, text, position, offset);
+  if (importPathCompletions) return importPathCompletions;
+
+  // 字符串插值 `${ ... }` 内补全变量与函数（同样要先于字符串守卫）
+  const interpolationCompletions = getInterpolationCompletions(doc, text, offset);
+  if (interpolationCompletions) return interpolationCompletions;
+
   if (isInsideStringOrComment(text, offset)) return [];
+
+  // 结构体字面量内补全字段名：Point{ ... }
+  const structLiteralCompletions = getStructLiteralCompletions(doc, text, offset);
+  if (structLiteralCompletions) return structLiteralCompletions;
+
+  // 类型上下文：let x: / 参数: / struct 字段: / -> / new / extends / is
+  const typeContextCompletions = getTypeContextCompletions(doc, text, offset);
+  if (typeContextCompletions) return typeContextCompletions;
 
   const prefix = getWordPrefix(text, offset);
   const before = text.slice(Math.max(0, offset - 1), offset);
@@ -1139,68 +1540,47 @@ connection.onCompletion((params: CompletionParams): CompletionItem[] => {
     });
   }
 
-  // 2. import 后的路径：补全内置模块名
-  const beforeImport = text.slice(Math.max(0, offset - 50), offset);
-  if (/(?:^|\n)\s*import\s+["']?[^"']*$/.test(beforeImport)) {
-    const quoted = /["'][^"']*$/.test(beforeImport);
-    const mods = [
-      ...new Set([...ALL_NAMESPACES, ...Object.keys(MODULE_NAMESPACE)]),
-    ].sort();
-    if (quoted) {
-      // 引号内：给标准库 catalog 中声明的模块名和别名
-      return mods.map((m) => ({
-        label: m,
-        kind: CompletionItemKind.Module,
-        detail: MODULE_NAMESPACE[m] && MODULE_NAMESPACE[m] !== m
-          ? `导入后使用 ${MODULE_NAMESPACE[m]}.xxx`
-          : '内置标准库模块',
-      }));
-    }
-    return [
-      { label: '"${1:path}"', kind: CompletionItemKind.Snippet, insertText: '"${1:path}"', detail: '模块路径' },
-    ];
-  }
-
-  // 3. import / package 关键字后
-  if (/(?:^|\n)\s*import\s*$/.test(beforeImport) || /(?:^|\n)\s*package\s*$/.test(beforeImport)) {
-    return [
-      { label: '"${1:path}"', kind: CompletionItemKind.Snippet, insertText: '"${1:path}"' },
-    ];
-  }
-
-  // 4. 标准补全：关键字 + 类型 + 函数 + 局部符号
+  // 2. 标准补全：关键字 + 类型 + 函数 + 局部符号
   const items: CompletionItem[] = [];
   const seen = new Set<string>();
 
   // 内置项
   for (const m of ALL_COMPLETIONS) {
-    if (prefix && !m.label.toLowerCase().startsWith(prefix.toLowerCase())) continue;
+    if (!matchesPrefix(m.label, prefix)) continue;
     if (seen.has(m.label)) continue;
     seen.add(m.label);
     items.push(metaToCompletion(m));
   }
 
-  // 用户符号
-  const { symbols, varTypes, funcs } = analyzeDocument(doc);
+  // 用户符号：函数/类型直接列出，变量做作用域过滤后优先展示
+  const { symbols, funcs } = analyzeDocument(doc);
   for (const s of symbols) {
-    if (prefix && !s.name.toLowerCase().startsWith(prefix.toLowerCase())) continue;
+    if (s.kind === SymbolKind.Variable || s.kind === SymbolKind.Constant) continue;
+    if (!matchesPrefix(s.name, prefix)) continue;
     if (seen.has(s.name)) continue;
     seen.add(s.name);
     const k = s.kind === SymbolKind.Function ? CompletionItemKind.Function
       : s.kind === SymbolKind.Method ? CompletionItemKind.Method
-      : s.kind === SymbolKind.Constant ? CompletionItemKind.Constant
-        : s.kind === SymbolKind.Class ? CompletionItemKind.Class
-          : s.kind === SymbolKind.Struct ? CompletionItemKind.Struct
-            : s.kind === SymbolKind.Enum ? CompletionItemKind.Enum
-              : s.kind === SymbolKind.Interface ? CompletionItemKind.Interface
-                : s.kind === SymbolKind.Module ? CompletionItemKind.Module
-                  : CompletionItemKind.Variable;
+      : s.kind === SymbolKind.Class ? CompletionItemKind.Class
+        : s.kind === SymbolKind.Struct ? CompletionItemKind.Struct
+          : s.kind === SymbolKind.Enum ? CompletionItemKind.Enum
+            : s.kind === SymbolKind.Interface ? CompletionItemKind.Interface
+              : s.kind === SymbolKind.Module ? CompletionItemKind.Module
+                : CompletionItemKind.Variable;
     items.push({
       label: s.name,
       kind: k,
       detail: s.detail,
-      documentation: varTypes.get(s.name) ? `类型: \`${varTypes.get(s.name)}\`` : undefined,
+      sortText: `0000_${s.name}`,
+      filterText: s.name,
     });
+  }
+
+  // 可见变量（排除未声明/其他函数局部变量），排序高于内置项
+  for (const item of inScopeVariableItems(doc, position.line, prefix)) {
+    if (seen.has(item.label)) continue;
+    seen.add(item.label);
+    items.push(item);
   }
 
   const bareImports = getImportedFunctions(text, doc.uri);
@@ -1209,7 +1589,7 @@ connection.onCompletion((params: CompletionParams): CompletionItem[] => {
     if (!func.methodOwner) importedNameCounts.set(func.name, (importedNameCounts.get(func.name) ?? 0) + 1);
   }
   for (const func of bareImports) {
-    if (func.methodOwner || (prefix && !func.name.toLowerCase().startsWith(prefix.toLowerCase())) || seen.has(func.name)) continue;
+    if (func.methodOwner || !matchesPrefix(func.name, prefix) || seen.has(func.name)) continue;
     if (importedNameCounts.get(func.name) !== 1) continue;
     seen.add(func.name);
     items.push({
@@ -1221,6 +1601,7 @@ connection.onCompletion((params: CompletionParams): CompletionItem[] => {
         : undefined,
       insertText: functionCallSnippet(func.name, func.params),
       insertTextFormat: InsertTextFormat.Snippet,
+      sortText: `0000_${func.name}`,
     });
   }
 
@@ -1228,13 +1609,16 @@ connection.onCompletion((params: CompletionParams): CompletionItem[] => {
   for (const f of funcs.values()) {
     if (position.line >= f.bodyStartLine && position.line <= f.bodyEndLine) {
       for (const p of f.params) {
-        if (prefix && !p.toLowerCase().startsWith(prefix.toLowerCase())) continue;
-        if (seen.has(p)) continue;
-        seen.add(p);
+        const paramName = /^[A-Za-z_][A-Za-z0-9_]*/.exec(p)?.[0] ?? p;
+        if (!matchesPrefix(paramName, prefix)) continue;
+        if (seen.has(paramName)) continue;
+        seen.add(paramName);
         items.push({
-          label: p,
+          label: paramName,
           kind: CompletionItemKind.Variable,
           detail: `参数（${f.name}）`,
+          sortText: `0000_${paramName}`,
+          filterText: paramName,
         });
       }
     }
@@ -1242,6 +1626,529 @@ connection.onCompletion((params: CompletionParams): CompletionItem[] => {
 
   return items;
 });
+
+// ---------------- import 路径补全 ----------------
+
+interface ImportContext {
+  /** 字符串内容起始偏移；为 null 表示光标不在引号内（尚未写路径） */
+  contentStart: number | null;
+  /** 光标前已输入的部分路径 */
+  partial: string;
+}
+
+/** 判断 offset 是否位于某条 import 语句中（含 `import [` 列表的续行）。 */
+function importContextAt(text: string, offset: number): ImportContext | null {
+  const tokens = tokenize(text);
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i].type !== 'keyword' || tokens[i].value !== 'import') continue;
+    let endIndex = i + 1;
+    let end = tokens[i].end;
+    if (tokens[endIndex]?.value === '[') {
+      const close = matchingTokenIndex(tokens, endIndex, '[', ']');
+      if (close < 0) {
+        endIndex = tokens.length - 1;
+        end = tokens[endIndex]?.end ?? end;
+      } else {
+        endIndex = close;
+        end = tokens[close].end;
+      }
+    } else {
+      endIndex = i;
+      while (endIndex + 1 < tokens.length && tokens[endIndex + 1].line === tokens[i].line) endIndex++;
+      end = tokens[endIndex].end;
+    }
+    if (offset < tokens[i].start || offset > end + 1) continue;
+
+    for (let k = i + 1; k <= endIndex && k < tokens.length; k++) {
+      const token = tokens[k];
+      if (token.type !== 'string') continue;
+      const quote = token.value[0];
+      if (quote !== '"' && quote !== "'") continue;
+      if (offset < token.start || offset > token.end) continue;
+      const contentStart = token.start + 1;
+      return { contentStart, partial: text.slice(contentStart, Math.min(offset, token.end - 1)) };
+    }
+    return { contentStart: null, partial: '' };
+  }
+  return null;
+}
+
+/** import 语句中的路径补全：标准库模块名 + 相对路径下的 .ys 文件/目录。 */
+function getImportPathCompletions(
+  doc: TextDocument,
+  text: string,
+  position: Position,
+  offset: number,
+): CompletionItem[] | null {
+  const context = importContextAt(text, offset);
+  if (!context) return null;
+
+  const lineStart = lineStartOffset(text, position.line);
+  const linePrefix = text.slice(lineStart, offset).trimStart();
+
+  if (context.contentStart === null) {
+    // 尚未写引号：仅在 `import` / `import [` / 列表逗号之后给候选
+    const isImportHead =
+      /^import\s*\[?\s*$/.test(linePrefix)
+      || /^import\s*\[[\s\S]*,\s*$/.test(linePrefix);
+    if (!isImportHead) return null;
+    const modules = sortedModuleNames();
+    const prefix = getWordPrefix(text, offset);
+    const items: CompletionItem[] = [{
+      label: '"${1:path}"',
+      kind: CompletionItemKind.Snippet,
+      detail: '模块路径或相对脚本路径',
+      insertText: '"${1:path}"',
+      insertTextFormat: InsertTextFormat.Snippet,
+    }];
+    for (const module of modules) {
+      if (prefix && !module.toLowerCase().startsWith(prefix.toLowerCase())) continue;
+      items.push({
+        label: module,
+        kind: CompletionItemKind.Module,
+        detail: MODULE_NAMESPACE[module] && MODULE_NAMESPACE[module] !== module
+          ? `导入后使用 ${MODULE_NAMESPACE[module]}.xxx`
+          : '内置标准库模块',
+        insertText: `"${module}"`,
+      });
+    }
+    return items;
+  }
+
+  const { partial } = context;
+  const replaceRange = {
+    start: offsetToPosition(text, context.contentStart),
+    end: position,
+  };
+  const isLocalPath = partial.startsWith('.') || partial.startsWith('/') || partial.includes('/');
+  const items: CompletionItem[] = [];
+
+  if (isLocalPath) {
+    items.push(...filesystemImportCompletions(doc, partial, replaceRange));
+  } else {
+    for (const module of sortedModuleNames()) {
+      if (partial && !module.toLowerCase().startsWith(partial.toLowerCase())) continue;
+      items.push({
+        label: module,
+        kind: CompletionItemKind.Module,
+        detail: MODULE_NAMESPACE[module] && MODULE_NAMESPACE[module] !== module
+          ? `导入后使用 ${MODULE_NAMESPACE[module]}.xxx`
+          : '内置标准库模块',
+        textEdit: TextEdit.replace(replaceRange, module),
+      });
+    }
+  }
+  return items;
+}
+
+function sortedModuleNames(): string[] {
+  return [...new Set([...ALL_NAMESPACES, ...Object.keys(MODULE_NAMESPACE)])].sort();
+}
+
+/** 相对路径补全：列出目标目录下的子目录与 .ys 文件（去掉扩展名）。 */
+function filesystemImportCompletions(
+  doc: TextDocument,
+  partial: string,
+  range: { start: Position; end: Position },
+): CompletionItem[] {
+  if (!doc.uri.startsWith('file:')) return [];
+  const baseDir = path.dirname(fileURLToPath(doc.uri));
+  const slash = partial.lastIndexOf('/');
+  const dirPart = slash >= 0 ? partial.slice(0, slash + 1) : '';
+  const namePart = slash >= 0 ? partial.slice(slash + 1) : partial;
+  const targetDir = path.resolve(baseDir, dirPart || '.');
+
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(targetDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const items: CompletionItem[] = [];
+  const lowerName = namePart.toLowerCase();
+  for (const entry of entries) {
+    if (entry.name.startsWith('.') && !namePart.startsWith('.') && entry.name !== '..') continue;
+    if (entry.isDirectory()) {
+      if (namePart && !entry.name.toLowerCase().startsWith(lowerName)) continue;
+      items.push({
+        label: `${entry.name}/`,
+        kind: CompletionItemKind.Folder,
+        detail: '脚本目录',
+        textEdit: TextEdit.replace(range, `${dirPart}${entry.name}`),
+      });
+    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.ys')) {
+      const stem = entry.name.slice(0, -3);
+      if (namePart && !stem.toLowerCase().startsWith(lowerName)) continue;
+      items.push({
+        label: stem,
+        kind: CompletionItemKind.File,
+        detail: entry.name,
+        textEdit: TextEdit.replace(range, `${dirPart}${stem}`),
+      });
+    }
+  }
+  return items;
+}
+
+// ---------------- 结构体字面量字段补全 ----------------
+
+/** 在 `Type{ ... }` 内补全尚未赋值的字段名。 */
+function getStructLiteralCompletions(
+  doc: TextDocument,
+  text: string,
+  offset: number,
+): CompletionItem[] | null {
+  const before = text.slice(0, offset);
+  // 找到光标前最近一个未闭合的 `{`
+  let depth = 0;
+  let bracePos = -1;
+  for (let i = before.length - 1; i >= 0; i--) {
+    const ch = before[i];
+    if (ch === '}') depth++;
+    else if (ch === '{') {
+      if (depth === 0) { bracePos = i; break; }
+      depth--;
+    }
+  }
+  if (bracePos < 0) return null;
+
+  const head = before.slice(0, bracePos);
+  const nameMatch = /([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(head);
+  if (!nameMatch) return null;
+  const structName = nameMatch[1];
+
+  const beforeName = head.slice(0, nameMatch.index).trimEnd();
+  // 排除 `struct Point {`、`if x {` 等声明/控制块
+  if (/(struct|class|enum|interface|func|if|for|while|switch|match|else|elif|catch|finally|loop|warp|do|using|namespace)\s*$/.test(beforeName)) {
+    return null;
+  }
+
+  const { structs } = analyzeDocument(doc);
+  if (!structs.has(structName)) return null;
+
+  const body = before.slice(bracePos + 1);
+  const usedFields = new Set<string>();
+  for (const m of body.matchAll(/([A-Za-z_][A-Za-z0-9_]*)\s*:/g)) usedFields.add(m[1]);
+
+  const prefix = getWordPrefix(text, offset);
+  const items = collectStructFields(structName, structs)
+    .filter((field) => !usedFields.has(field.name))
+    .filter((field) => !prefix || field.name.toLowerCase().startsWith(prefix.toLowerCase()))
+    .map((field) => ({
+      label: field.name,
+      kind: CompletionItemKind.Field,
+      detail: `${structName} 字段 · ${field.type}`,
+      documentation: { kind: MarkupKind.Markdown, value: `\`\`\`yscript\n${field.detail}\n\`\`\`` },
+      insertText: `${field.name}: `,
+      filterText: field.name,
+      sortText: `0_${field.name}`,
+    }));
+  return items.length > 0 ? items : null;
+}
+
+// ---------------- 作用域内变量补全 ----------------
+
+/**
+ * 收集在 line 行可见的变量/常量：
+ * - 排除在光标之后才声明的变量；
+ * - 排除其他函数体内的局部变量。
+ */
+function inScopeVariableItems(doc: TextDocument, line: number, prefix: string): CompletionItem[] {
+  const { symbols, varTypes, funcs } = analyzeDocument(doc);
+  const items: CompletionItem[] = [];
+  for (const s of symbols) {
+    if (s.kind !== SymbolKind.Variable && s.kind !== SymbolKind.Constant) continue;
+    const declLine = s.selectionRange.start.line;
+    if (declLine > line) continue;
+    const owner = [...funcs.values()].find(
+      (f) => declLine >= f.bodyStartLine && declLine <= f.bodyEndLine,
+    );
+    if (owner && !(line >= owner.bodyStartLine && line <= owner.bodyEndLine)) continue;
+    if (prefix && !matchesPrefix(s.name, prefix)) continue;
+    const type = varTypes.get(s.name);
+    items.push({
+      label: s.name,
+      kind: s.kind === SymbolKind.Constant ? CompletionItemKind.Constant : CompletionItemKind.Variable,
+      detail: s.detail ?? s.name,
+      documentation: type ? `类型: \`${type}\`` : undefined,
+      sortText: `0000_${s.name}`,
+      filterText: s.name,
+    });
+  }
+  return items;
+}
+
+// ---------------- 类型上下文补全 ----------------
+
+type TypeContextMode = 'types' | 'new' | 'extends';
+
+/**
+ * 识别「应该输入类型名」的上下文：
+ *   ->        函数返回类型
+ *   let x:    变量类型注解
+ *   f(name:   参数类型 / struct 字段类型
+ *   new       实例化
+ *   extends   继承
+ *   is        类型判断
+ */
+function getTypeContextAt(text: string, offset: number): { mode: TypeContextMode; prefix: string } | null {
+  const before = text.slice(Math.max(0, offset - 240), offset);
+
+  const arrow = /->\s*([A-Za-z_][A-Za-z0-9_]*)?$/.exec(before);
+  if (arrow) return { mode: 'types', prefix: arrow[1] ?? '' };
+
+  const keyword = /\b(new|extends|is)\s+([A-Za-z_][A-Za-z0-9_]*)?$/.exec(before);
+  if (keyword) return { mode: keyword[1] as TypeContextMode, prefix: keyword[2] ?? '' };
+
+  const annotation = /\b(?:let|const|var)\s+[A-Za-z_][A-Za-z0-9_]*\s*:\s*([\w\s<>,]*)$/.exec(before);
+  if (annotation) return { mode: 'types', prefix: trailingWord(annotation[1]) };
+
+  const paramPrefix = parameterTypePrefixAt(text, offset);
+  if (paramPrefix !== null) return { mode: 'types', prefix: paramPrefix };
+
+  const fieldPrefix = structFieldTypePrefixAt(text, offset);
+  if (fieldPrefix !== null) return { mode: 'types', prefix: fieldPrefix };
+
+  return null;
+}
+
+/** 光标是否处于函数参数列表的 `name: ` 之后；是则返回已输入的类型前缀。 */
+function parameterTypePrefixAt(text: string, offset: number): string | null {
+  let depth = 0;
+  let open = -1;
+  for (let i = offset - 1; i >= 0; i--) {
+    const ch = text[i];
+    if (ch === ')') depth++;
+    else if (ch === '(') {
+      if (depth === 0) { open = i; break; }
+      depth--;
+    }
+  }
+  if (open < 0) return null;
+  const segment = text.slice(open + 1, offset);
+  const lastParam = segment.slice(segment.lastIndexOf(',') + 1);
+  if (!/^\s*[A-Za-z_][A-Za-z0-9_]*\s*:\s*[\w\s<>,]*$/.test(lastParam)) return null;
+  return trailingWord(lastParam);
+}
+
+/** 光标是否处于 struct/class 体的 `field: ` 之后；是则返回已输入的类型前缀。 */
+function structFieldTypePrefixAt(text: string, offset: number): string | null {
+  let depth = 0;
+  let open = -1;
+  for (let i = offset - 1; i >= 0; i--) {
+    const ch = text[i];
+    if (ch === '}') depth++;
+    else if (ch === '{') {
+      if (depth === 0) { open = i; break; }
+      depth--;
+    }
+  }
+  if (open < 0) return null;
+  const head = text.slice(0, open);
+  if (!/(^|\n)\s*(struct|class)\s+[A-Za-z_][A-Za-z0-9_]*(\s+extends\s+[A-Za-z_][A-Za-z0-9_]*)?\s*$/.test(head)) {
+    return null;
+  }
+  const segment = text.slice(open + 1, offset);
+  const lastField = segment.slice(Math.max(segment.lastIndexOf(','), segment.lastIndexOf('\n')) + 1);
+  if (!/^\s*[A-Za-z_][A-Za-z0-9_]*\s*:\s*[\w\s<>,]*$/.test(lastField)) return null;
+  return trailingWord(lastField);
+}
+
+/** 类型上下文补全入口：内置类型 + 用户/第三方结构体、枚举、接口。 */
+function getTypeContextCompletions(
+  doc: TextDocument,
+  text: string,
+  offset: number,
+): CompletionItem[] | null {
+  const context = getTypeContextAt(text, offset);
+  if (!context) return null;
+  const { mode, prefix } = context;
+  const { structs, enums, symbols } = analyzeDocument(doc);
+  const importedTypeNames = mode === 'extends' || mode === 'new' || mode === 'types'
+    ? getImportedTypeNames(text, doc.uri)
+    : [];
+
+  const items: CompletionItem[] = [];
+  const seen = new Set<string>();
+  const push = (
+    name: string,
+    kind: CompletionItemKind,
+    detail: string,
+    rank: number,
+    insertText?: string,
+  ) => {
+    if (seen.has(name)) return;
+    if (prefix && !matchesPrefix(name, prefix)) return;
+    seen.add(name);
+    items.push({
+      label: name,
+      kind,
+      detail,
+      insertText: insertText ?? name,
+      insertTextFormat: insertText?.includes('$') ? InsertTextFormat.Snippet : InsertTextFormat.PlainText,
+      sortText: `${String(rank).padStart(4, '0')}_${name}`,
+      filterText: name,
+    });
+  };
+
+  if (mode === 'types') {
+    for (const t of TYPES) {
+      push(t.label, CompletionItemKind.TypeParameter, t.detail, t.of === 'ffi' ? 2 : 0, t.insertText);
+    }
+    for (const s of structs.values()) {
+      push(s.name, CompletionItemKind.Struct, `${s.name} 结构体${s.parent ? ` · extends ${s.parent}` : ''}`, 1);
+    }
+    for (const e of enums.values()) {
+      push(e.name, CompletionItemKind.Enum, `${e.name} 枚举`, 1);
+    }
+    for (const s of symbols) {
+      if (s.kind === SymbolKind.Interface) push(s.name, CompletionItemKind.Interface, `${s.name} 接口`, 1);
+    }
+    for (const name of importedTypeNames) {
+      push(name, CompletionItemKind.Struct, `第三方类型: ${name}`, 1);
+    }
+    return items.length > 0 ? items : null;
+  }
+
+  // new / extends：用户与第三方结构体优先，new 额外给出内置类型兜底
+  for (const s of structs.values()) {
+    push(s.name, CompletionItemKind.Struct, `${s.name} 结构体${s.parent ? ` · extends ${s.parent}` : ''}`, 0);
+  }
+  for (const name of importedTypeNames) {
+    push(name, CompletionItemKind.Struct, `第三方类型: ${name}`, 1);
+  }
+  if (mode === 'new') {
+    for (const t of TYPES) {
+      if (t.of === 'ffi') continue;
+      push(t.label, CompletionItemKind.TypeParameter, t.detail, 2, t.insertText);
+    }
+  }
+  return items.length > 0 ? items : null;
+}
+
+/** 收集项目导入脚本库中的结构体/枚举/接口名。 */
+function getImportedTypeNames(text: string, importingUri: string): string[] {
+  const { projectPaths } = parseImports(text);
+  const names = new Set<string>();
+  const seenFiles = new Set<string>();
+  for (const importPath of projectPaths) {
+    for (const filePath of resolveProjectImportFiles(importPath, importingUri)) {
+      if (seenFiles.has(filePath)) continue;
+      seenFiles.add(filePath);
+      let source: string;
+      try {
+        source = fs.readFileSync(filePath, 'utf8');
+      } catch {
+        continue;
+      }
+      const importedDoc = TextDocument.create(pathToFileURL(filePath).toString(), 'yscript', 1, source);
+      const { structs, enums } = analyzeDocument(importedDoc);
+      for (const s of structs.values()) names.add(s.name);
+      for (const e of enums.values()) names.add(e.name);
+    }
+  }
+  return [...names];
+}
+
+// ---------------- 字符串插值补全 ----------------
+
+/** 光标若位于字符串 `${ ... }` 内，返回其中已输入的前缀；否则返回 null。 */
+function interpolationPrefixAt(text: string, offset: number): string | null {
+  let inString = false;
+  let stringChar = '';
+  let inInterp = false;
+  let interpStart = -1;
+  let nestedQuote = '';
+  let inLineComment = false;
+  let inBlockComment = false;
+  let i = 0;
+  while (i < offset) {
+    const ch = text[i];
+    if (inLineComment) {
+      if (ch === '\n') inLineComment = false;
+    } else if (inBlockComment) {
+      if (ch === '*' && text[i + 1] === '#') { inBlockComment = false; i++; }
+    } else if (inString) {
+      if (nestedQuote) {
+        if (ch === '\\') { i += 2; continue; }
+        if (ch === nestedQuote) nestedQuote = '';
+      } else if (inInterp) {
+        if (ch === '"' || ch === "'" || ch === '`') nestedQuote = ch;
+        else if (ch === '}') inInterp = false;
+      } else if (ch === '\\') {
+        i += 2;
+        continue;
+      } else if (ch === '$' && text[i + 1] === '{') {
+        inInterp = true;
+        interpStart = i;
+        i += 2;
+        continue;
+      } else if (ch === stringChar) {
+        inString = false;
+      }
+    } else if (ch === '#' && text[i + 1] === '*') {
+      inBlockComment = true;
+      i++;
+    } else if (ch === '#') {
+      inLineComment = true;
+    } else if (ch === '"' || ch === '`') {
+      inString = true;
+      stringChar = ch;
+      inInterp = false;
+    }
+    i++;
+  }
+  if (!inString || !inInterp || interpStart < 0) return null;
+  let start = offset;
+  while (start > interpStart + 2 && isIdentChar(text[start - 1])) start--;
+  return text.slice(start, offset);
+}
+
+/** `"${...}"` 插值内补全：可见变量优先，其次用户函数与内置函数。 */
+function getInterpolationCompletions(
+  doc: TextDocument,
+  text: string,
+  offset: number,
+): CompletionItem[] | null {
+  const prefix = interpolationPrefixAt(text, offset);
+  if (prefix === null) return null;
+
+  const position = offsetToPosition(text, offset);
+  const items = inScopeVariableItems(doc, position.line, prefix);
+  const seen = new Set(items.map((item) => item.label));
+
+  const { funcs } = analyzeDocument(doc);
+  for (const f of funcs.values()) {
+    if (f.methodOwner || !matchesPrefix(f.name, prefix) || seen.has(f.name)) continue;
+    seen.add(f.name);
+    items.push({
+      label: f.name,
+      kind: CompletionItemKind.Function,
+      detail: `函数: ${f.name}(${f.params.join(', ')})`,
+      insertText: functionCallSnippet(f.name, f.params),
+      insertTextFormat: InsertTextFormat.Snippet,
+      sortText: `0001_${f.name}`,
+    });
+  }
+  for (const m of ALL_COMPLETIONS) {
+    if (m.kind !== 'builtin') continue;
+    if (!matchesPrefix(m.label, prefix) || seen.has(m.label)) continue;
+    seen.add(m.label);
+    items.push({
+      label: m.label,
+      kind: CompletionItemKind.Function,
+      detail: m.detail,
+      documentation: m.signature
+        ? { kind: MarkupKind.Markdown, value: buildHoverDoc(m) }
+        : undefined,
+      insertText: m.insertText ?? m.label,
+      insertTextFormat: m.insertText?.includes('$') ? InsertTextFormat.Snippet : InsertTextFormat.PlainText,
+      sortText: `0002_${m.label}`,
+    });
+  }
+  return items;
+}
 
 function getPermissionDirectiveCompletions(
   text: string,
@@ -1362,14 +2269,41 @@ function getMemberCompletions(doc: TextDocument, text: string, dotOffset: number
     return items;
   }
 
-  // ── 2. 类型成员（list. / string. / dict. …）────────────────────
-  // 解析类型
-  const { varTypes, funcs } = analyzeDocument(doc);
+  // ── 2. 枚举成员（Color.）────────────────────────────────────────
+  const { varTypes, funcs, structs, enums } = analyzeDocument(doc);
+  if (enums.has(receiver)) {
+    return enums.get(receiver)!.members.map((name) => ({
+      label: name,
+      kind: CompletionItemKind.EnumMember,
+      detail: `${receiver} 枚举值`,
+      insertText: name,
+      insertTextFormat: InsertTextFormat.PlainText,
+    }));
+  }
+
+  // ── 3. 类型成员（list. / string. / dict. / 自定义 struct 字段与方法）──
+  // 解析类型（支持 p. / this. / pkt.ip 链式字段）
   const activeLine = offsetToPosition(text, dotOffset).line;
   const enclosingMethod = [...funcs.values()].find((func) =>
     func.methodOwner && activeLine >= func.bodyStartLine && activeLine <= func.bodyEndLine,
   );
-  const type = varTypes.get(receiver) ?? (receiver === 'this' ? enclosingMethod?.methodOwner : undefined);
+  const contextOwner = enclosingMethod?.methodOwner;
+  const type = resolveReceiverType(receiver, varTypes, structs, contextOwner);
+
+  // 自定义结构体字段（含继承链）
+  const structType = type && structs.has(type) ? type : undefined;
+  if (structType) {
+    for (const field of collectStructFields(structType, structs)) {
+      members.push({
+        label: field.name,
+        kind: CompletionItemKind.Field,
+        detail: `${structType} 字段 · ${field.type}`,
+        documentation: { kind: MarkupKind.Markdown, value: `\`\`\`yscript\n${field.detail}\n\`\`\`` },
+        insertText: field.name,
+        insertTextFormat: InsertTextFormat.PlainText,
+      });
+    }
+  }
 
   // 若类型未知，给出通用 list/string 方法
   const candidateTypes: string[] = [];
@@ -1393,21 +2327,30 @@ function getMemberCompletions(doc: TextDocument, text: string, dotOffset: number
     }
   }
 
+  // 自定义方法（含继承链：Dog extends Animal 时 dog. 也补出 Animal 的方法）
+  const methodOwners = type ? collectStructMethodOwners(type, structs) : [];
   const customMethods = [
-    ...[...funcs.values()].filter((func) => func.methodOwner && func.methodOwner === type),
-    ...getImportedFunctions(text, doc.uri).filter((func) => func.methodOwner && func.methodOwner === type),
+    ...[...funcs.values()].filter((func) => func.methodOwner && methodOwners.includes(func.methodOwner!)),
+    ...getImportedFunctions(text, doc.uri).filter(
+      (func) => func.methodOwner && methodOwners.includes(func.methodOwner!),
+    ),
   ];
   if (receiver === 'this' || type) {
     const seenMethods = new Set(members.map((member) => member.label));
-    for (const method of customMethods) {
-      if (seenMethods.has(method.name)) continue;
-      seenMethods.add(method.name);
-      members.push({
-        label: method.name,
-        kind: CompletionItemKind.Method,
-        detail: `${method.methodOwner ?? 'this'} 自定义方法`,
-        documentation: `func this.${method.name}(${method.params.join(', ')})`,
-      });
+    // 自身方法优先于父类方法
+    for (const owner of methodOwners) {
+      for (const method of customMethods) {
+        if (method.methodOwner !== owner || seenMethods.has(method.name)) continue;
+        seenMethods.add(method.name);
+        members.push({
+          label: method.name,
+          kind: CompletionItemKind.Method,
+          detail: owner === type
+            ? `${method.methodOwner ?? 'this'} 自定义方法`
+            : `继承自 ${method.methodOwner}`,
+          documentation: `func ${method.methodOwner}.${method.name}(${method.params.join(', ')})`,
+        });
+      }
     }
   }
 
@@ -1480,10 +2423,10 @@ connection.onDefinition((params: DefinitionParams): Definition | null => {
       };
     }
   }
-  const { symbols, funcs, varTypes } = analyzeDocument(doc);
+  const { symbols, funcs, varTypes, structs } = analyzeDocument(doc);
   const receiver = /([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*$/.exec(text.slice(0, wordStart))?.[1];
   const method = receiver
-    ? findMethodForReceiver(text, receiver, word, funcs, varTypes, textDocument.uri, currentMethodOwner(funcs, position.line))
+    ? findMethodForReceiver(text, receiver, word, funcs, varTypes, textDocument.uri, currentMethodOwner(funcs, position.line), structs)
     : undefined;
   if (method) {
     return {
@@ -1493,6 +2436,25 @@ connection.onDefinition((params: DefinitionParams): Definition | null => {
         end: { line: method.declLine, character: method.declEndChar },
       },
     };
+  }
+  // 结构体字段跳转定义（支持 p.field / this.field / pkt.ip.field）
+  const dottedReceiver = /([A-Za-z_][A-Za-z0-9_.]*)\s*\.\s*$/.exec(text.slice(0, wordStart))?.[1];
+  if (dottedReceiver) {
+    const receiverType = resolveReceiverType(
+      dottedReceiver, varTypes, structs, currentMethodOwner(funcs, position.line),
+    );
+    if (receiverType) {
+      const field = findFieldInfo(receiverType, word, structs);
+      if (field) {
+        return {
+          uri: field.uri,
+          range: {
+            start: { line: field.declLine, character: field.declChar },
+            end: { line: field.declLine, character: field.declEndChar },
+          },
+        };
+      }
+    }
   }
   const aliasedImport = receiver
     ? findAliasedImportedFunction(text, receiver, word, textDocument.uri)
@@ -1653,14 +2615,14 @@ connection.onSignatureHelp((params: SignatureHelpParams): SignatureHelp | null =
   const meta = HOVER_INDEX.get(callName) ?? HOVER_INDEX.get(callName.split('.').pop() || '');
   if (!meta) {
     // 用户定义函数 / 自定义方法
-    const { funcs, varTypes } = analyzeDocument(doc);
+    const { funcs, varTypes, structs } = analyzeDocument(doc);
     const functionName = callName.split('.').pop() || callName;
     const receiver = callName.includes('.') ? callName.slice(0, callName.lastIndexOf('.')) : '';
     const f = (receiver
       ? findAliasedImportedFunction(text, receiver, functionName, doc.uri)
       : undefined)
       ?? (receiver
-      ? findMethodForReceiver(text, receiver, functionName, funcs, varTypes, doc.uri, currentMethodOwner(funcs, params.position.line))
+      ? findMethodForReceiver(text, receiver, functionName, funcs, varTypes, doc.uri, currentMethodOwner(funcs, params.position.line), structs)
       : undefined)
       ?? funcs.get(callName)
       ?? funcs.get(functionName)
@@ -1738,6 +2700,7 @@ function findMethodForReceiver(
   varTypes: Map<string, string>,
   importingUri: string,
   contextOwner?: string,
+  structs?: Map<string, StructInfo>,
 ): FuncInfo | undefined {
   const candidates = new Set<string>();
   const importedFunctions = getImportedFunctions(text, importingUri);
@@ -1754,7 +2717,12 @@ function findMethodForReceiver(
     }
   }
   const explicitlyTyped = varTypes.get(receiver);
-  if (explicitlyTyped) candidates.add(explicitlyTyped);
+  if (explicitlyTyped) {
+    candidates.add(explicitlyTyped);
+    if (structs) {
+      for (const owner of collectStructMethodOwners(explicitlyTyped, structs)) candidates.add(owner);
+    }
+  }
   if (receiver && receiver !== 'this') candidates.add(receiver);
 
   for (const owner of candidates) {

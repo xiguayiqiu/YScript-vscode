@@ -360,7 +360,7 @@ export function tokenize(source: string): Token[] {
       continue;
     }
     if (['==', '!=', '<=', '>=', '&&', '||', '<<', '>>', '+=', '-=', '*=', '/=', '%=',
-      '&=', '|=', '^=', '=>', '->', '<-', '::', '?:', '?.', '??', '..', '|>', '@>'].includes(two)) {
+      '&=', '|=', '^=', '=>', '->', '<-', '::', '?:', '?.', '??', '..', '|>', '@>', '++', '--'].includes(two)) {
       push('operator', two, start, i + 2, startLine, startCol);
       col += 2; i += 2;
       continue;
