@@ -1,8 +1,23 @@
 # YScript VSCode 插件
 
+<p align="center">
+  <img src="icon.png" alt="YScript logo" width="128">
+</p>
+
 为 YScript（网安专用脚本语言）提供 VSCode 完整支持：语法高亮、LSP 智能补全、悬停文档、跳转定义、代码片段。
 
-当前适配 YScript 解释器 `v0.1.5.3`；VS Code 扩展包版本独立管理。扩展可识别并高亮 `ysc.models` / `ysc.sum` 项目依赖清单。
+当前适配 YScript 解释器 `v0.2.4.3-Alpha`；VS Code 扩展包版本独立管理。扩展可识别并高亮 `ysc.models` / `ysc.sum` 项目依赖清单。
+
+## YScript v0.2.4.3-Alpha（TLS 客户端证书与连接升级）
+
+解释器新增客户端证书加载与 TLS 升级能力，编辑器补全、悬停与签名帮助同步跟进：
+
+- `ssl.Connect(address, insecure?, server_name?, client_cert_pem?, client_key_pem?, ca_pem?)` 支持加载客户端证书链（服务端请求客户端证书时使用，如 ADB STLS 的 TLS 1.3 双向认证）；证书与私钥既可传 PEM 文本，也可传文件路径。
+- 新增 `ssl.WrapSocket(conn, insecure?, server_name?, client_cert_pem?, client_key_pem?, ca_pem?)`：把 `net.dial` 连接或 `socket.Socket` 对象升级为 TLS。
+- 新增 `ssl.Read(id, size?)` / `ssl.Write(id, data)` / `ssl.Close(id)` / `ssl.ConnectionState(id)` / `ssl.LoadClientCertificate(cert_pem, key_pem)`：`ssl.Connect` 返回的连接字典现在可直接读写。
+- `net` 连接对象新增 `upgrade_tls(...)`（别名 `start_tls`），顶层新增 `net.UpgradeTLS(conn, ...)`：明文协议协商（如 ADB CNXN → STLS）完成后切换到 TLS，升级后原连接的 `read` / `write` 自动走 TLS。
+- `socket` 新增 `set_client_certificate(cert_pem, key_pem, ca_pem?)`，`start_tls` 支持客户端证书与自定义根证书。
+- 新增代码片段 `tlsclient`（带客户端证书的 TLS 连接）与 `tlsupgrade`（明文连接升级为 TLS）；`net.dial` 返回的连接对象支持 `conn.` 成员补全。
 
 ## 项目依赖清单
 

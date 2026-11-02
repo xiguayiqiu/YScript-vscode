@@ -979,8 +979,9 @@ const PERMISSION_APIS: Record<string, Record<string, string[]>> = {
     net: [
       'Accept', 'DialTCP', 'DialTimeout', 'DialUDP', 'Listen', 'LookupAddr',
       'LookupHost', 'LookupMX', 'LookupNS', 'LookupPort', 'LookupSRV',
-      'LookupTXT', 'ResolveTCP', 'ResolveUDP', 'dial', 'dial_tcp', 'dial_udp',
-      'listen_tcp', 'nginx', 'udp_bind', 'udp_dial',
+      'LookupTXT', 'ResolveTCP', 'ResolveUDP', 'StartTLS', 'UpgradeTLS',
+      'dial', 'dial_tcp', 'dial_udp', 'listen_tcp', 'nginx', 'start_tls',
+      'udp_bind', 'udp_dial', 'upgrade_tls',
     ],
     http: [
       'Delete', 'Do', 'Download', 'Form', 'Get', 'Head', 'Options', 'Patch',
@@ -989,7 +990,10 @@ const PERMISSION_APIS: Record<string, Record<string, string[]>> = {
     ],
     socket: ['Socket', 'port_scan', 'tcp_probe', 'tcp_request', 'tls_request', 'udp_request'],
     raw: ['OpenSocket', 'PcapOpen', 'PcapNext', 'Receive', 'Send'],
-    ssl: ['Connect', 'GetServerCertificate'],
+    ssl: [
+      'Close', 'Connect', 'ConnectionState', 'GetServerCertificate', 'Read',
+      'WrapSocket', 'Write',
+    ],
   },
 };
 

@@ -39,7 +39,7 @@ export const NS_MEMBERS: Record<string, string[]> = {
   load: ['install', 'load', 'loaded', 'reload', 'start', 'stop', 'uninstall', 'unload'],
   log: ['close', 'debug', 'error', 'flush', 'get_level', 'info', 'log', 'set_color', 'set_json', 'set_level', 'set_output', 'set_rotate', 'set_ts', 'to_json', 'warn'],
   lstd: ['alloc', 'bind', 'buffer', 'call', 'callback', 'callback_free', 'close', 'error', 'find', 'find_ordinal', 'free', 'load', 'ptr', 'read', 'str', 'write'],
-  net: ['Accept', 'CIDR', 'CIDR_contains', 'CIDR_merge', 'ConnClose', 'ConnRead', 'ConnWrite', 'DialTCP', 'DialTimeout', 'DialUDP', 'IPVersion', 'InterfaceBy', 'Interfaces', 'IsIP', 'Listen', 'LookupAddr', 'LookupHost', 'LookupMX', 'LookupNS', 'LookupPort', 'LookupSRV', 'LookupTXT', 'Nginx', 'ResolveTCP', 'ResolveUDP', 'dial', 'dial_tcp', 'dial_udp', 'listen_tcp', 'nginx', 'udp_bind', 'udp_dial'],
+  net: ['Accept', 'CIDR', 'CIDR_contains', 'CIDR_merge', 'ConnClose', 'ConnRead', 'ConnWrite', 'DialTCP', 'DialTimeout', 'DialUDP', 'IPVersion', 'InterfaceBy', 'Interfaces', 'IsIP', 'Listen', 'LookupAddr', 'LookupHost', 'LookupMX', 'LookupNS', 'LookupPort', 'LookupSRV', 'LookupTXT', 'Nginx', 'ResolveTCP', 'ResolveUDP', 'StartTLS', 'UpgradeTLS', 'dial', 'dial_tcp', 'dial_udp', 'listen_tcp', 'nginx', 'start_tls', 'udp_bind', 'udp_dial', 'upgrade_tls'],
   ocr: ['from_file', 'get_lang', 'get_psm', 'recognize', 'set_lang', 'set_psm'],
   os: ['environ', 'exec', 'exec_shell', 'exit', 'getenv', 'getpid', 'hostname', 'kill', 'running', 'setenv', 'shell', 'shell_background', 'signal_notify', 'sleep', 'temp_dir', 'wait'],
   path: ['abs', 'basename', 'clean', 'dirname', 'expand', 'ext', 'is_abs', 'is_rel', 'join', 'normalize', 'rel', 'split', 'stem', 'to_native', 'to_unix', 'volume'],
@@ -49,7 +49,7 @@ export const NS_MEMBERS: Record<string, string[]> = {
   regex: ['compile', 'find', 'find_all', 'match', 'named', 'replace', 'replace_fn', 'split'],
   rsa: ['Decrypt', 'Encrypt', 'GenerateKeyPair', 'Sign', 'Verify'],
   socket: ['Socket', 'default_timeout', 'port_scan', 'tcp_probe', 'tcp_request', 'tls_request', 'udp_request'],
-  ssl: ['Connect', 'DecodePEM', 'EncodePEM', 'GetCertificateInfo', 'GetServerCertificate', 'ParseCertificate', 'ParseCertificates', 'ParseCipherSuite', 'ParseTLSHandshake', 'ParseTLSRecord', 'ParseTLSVersion', 'VerifyCertificate'],
+  ssl: ['Close', 'Connect', 'ConnectionState', 'DecodePEM', 'EncodePEM', 'GetCertificateInfo', 'GetServerCertificate', 'LoadClientCertificate', 'ParseCertificate', 'ParseCertificates', 'ParseCipherSuite', 'ParseTLSHandshake', 'ParseTLSRecord', 'ParseTLSVersion', 'Read', 'VerifyCertificate', 'WrapSocket', 'Write'],
   stdio: ['bell', 'clear', 'clear_line', 'color', 'colorln', 'confirm', 'eof', 'err_print', 'err_printf', 'err_println', 'flush', 'getchar', 'has_input', 'hide_cursor', 'input', 'move_cursor', 'password', 'print', 'printf', 'println', 'prompt', 'put', 'putf', 'putln', 'puts', 'read', 'read_all', 'read_bool', 'read_float', 'read_int', 'read_line', 'select', 'show_cursor'],
   strings: ['Capitalize', 'Compare', 'Contains', 'Count', 'EqualFold', 'FromRunes', 'HasPrefix', 'HasSuffix', 'Index', 'IsBlank', 'IsControl', 'IsDigit', 'IsLetter', 'IsSpace', 'Join', 'LastIndex', 'Repeat', 'Replace', 'ReplaceN', 'RuneCount', 'Runes', 'Split', 'SplitN', 'ToLower', 'ToRunes', 'ToUpper', 'Trim', 'TrimLeft', 'TrimRight', 'TrimSpace'],
   sync: ['Atomic', 'Chan', 'Cond', 'Mutex', 'Once', 'RWMutex', 'Semaphore', 'TLS', 'WaitGroup', 'WorkerPool', 'case', 'default', 'select'],
@@ -70,6 +70,7 @@ export const NS_MEMBERS: Record<string, string[]> = {
   url: ['Decode', 'Encode', 'Parse'],
   xml: ['Parse', 'ParseFile'],
   yaml: ['from_file', 'parse'],
+  yui: ['backend', 'boot', 'color_chooser', 'destroy', 'dialog_raw', 'file_chooser', 'height', 'img_background', 'img_background_file', 'is_visible', 'label_clip', 'label_create', 'label_remove', 'label_shape', 'label_update', 'last_error', 'poll', 'render_begin', 'render_end', 'request_close', 'resize', 'set_background_alpha', 'set_clear_color', 'set_close_rule', 'set_modal', 'set_owner', 'set_title', 'set_visible', 'should_close', 'show', 'terminate', 'version', 'width', 'window', 'window_raw'],
 };
 
 /** 全部命名空间（判断 `xxx.` 是否为库调用时用） */
@@ -126,6 +127,7 @@ export const MODULE_NAMESPACE: Record<string, string> = {
   'url': 'url',
   'xml': 'xml',
   'yaml': 'yaml',
+  'yui': 'yui',
 };
 
 /** 标准库名称（含别名） -> 规范模块名 */
@@ -179,6 +181,7 @@ export const MODULE_CANONICAL: Record<string, string> = {
   'url': 'url',
   'xml': 'xml',
   'yaml': 'yaml',
+  'yui': 'yui',
 };
 
 /** 运行时命名空间 -> 自动导入时使用的规范模块名 */
@@ -228,6 +231,7 @@ export const NAMESPACE_MODULE: Record<string, string> = {
   'url': 'url',
   'xml': 'xml',
   'yaml': 'yaml',
+  'yui': 'yui',
 };
 
 /** 判断名称是否为标准库模块名或 catalog 别名 */

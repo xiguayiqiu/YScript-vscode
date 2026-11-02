@@ -922,5 +922,32 @@
       "${0}"
     ],
     "description": "CUDA 批量 PBKDF2；算法为 sha1、sha256 或 sha512"
+  },
+  "tls client cert": {
+    "prefix": "tlsclient",
+    "body": [
+      "let s = ssl.Connect(\"${1:host:port}\", ${2:false}, \"${3:localhost}\",",
+      "\t\"${4:client.crt}\", \"${5:client.key}\", \"${6:ca.crt}\")",
+      "println(\"TLS: \" + s[\"tls_version\"])",
+      "ssl.Write(s[\"id\"], \"${7:hello}\")",
+      "println(string(ssl.Read(s[\"id\"], 1024)))",
+      "ssl.Close(s[\"id\"])"
+    ],
+    "description": "带客户端证书的 TLS 连接（ssl.Connect + 客户端证书/私钥/根证书）"
+  },
+  "tls upgrade": {
+    "prefix": "tlsupgrade",
+    "body": [
+      "let conn = net.dial(\"tcp\", \"${1:host:port}\")",
+      "conn.set_timeout(${2:5})",
+      "# 明文协商完成后升级为 TLS（可带客户端证书）",
+      "let info = conn.upgrade_tls(${3:false}, \"${4:localhost}\",",
+      "\t\"${5:client.crt}\", \"${6:client.key}\", \"${7:ca.crt}\")",
+      "println(\"TLS: \" + info[\"tls_version\"])",
+      "conn.write(\"${8:payload}\")",
+      "println(string(conn.read(4096)))",
+      "conn.close()"
+    ],
+    "description": "明文连接升级为 TLS（net conn.upgrade_tls，支持客户端证书）"
   }
 }
